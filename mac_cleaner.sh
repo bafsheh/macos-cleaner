@@ -631,30 +631,84 @@ run_uninstaller() {
     say "Searching for: \"$search_name\""
     echo
 
-    # ── parallel result arrays ───────────────────────────────────────────────
+    # ── result arrays + dedup set ────────────────────────────────────────────
     local -a _paths=() _types=() _cmds=()
+    local -a _seen=()   # tracks recorded paths to avoid duplicates
 
     _record() {   # type  path  remove_cmd
-        _types+=("$1"); _paths+=("$2"); _cmds+=("$3")
+        local _t="$1" _p="$2" _c="$3"
+        local _s; for _s in "${_seen[@]:-}"; do [[ "$_s" == "$_p" ]] && return; done
+        _seen+=("$_p"); _types+=("$_t"); _paths+=("$_p"); _cmds+=("$_c")
     }
 
+    # ── safe single-quote escape for paths used inside eval strings ──────────
+    _sq() { printf '%s' "${1//\'/\'\\\'\'}"; }   # foo'bar → foo'\''bar
+
+    # ── collect extra search terms from discovered .app bundles ─────────────
+    # Populated during step 1; used in steps 8-13 so support files named by
+    # bundle-ID (e.g. com.logi.optionsplus) are found when the user searches
+    # by display name (e.g. "Logi Options+").
+    local -a _extra_terms=()
+
     # ── 1. .app bundles ──────────────────────────────────────────────────────
+    # Search by BOTH filesystem name (find) and Spotlight display name (mdfind)
+    # so apps whose bundle folder name differs from their Finder name are found.
     step "[.app bundles]"
     local p
+
+    _process_app_bundle() {
+        local bundle="$1"
+        [[ -d $bundle ]] || return
+        local info="${bundle}/Contents/Info.plist"
+        local bid exec_name
+        bid=$(defaults  read "${bundle}/Contents/Info" CFBundleIdentifier 2>/dev/null || true)
+        exec_name=$(defaults read "${bundle}/Contents/Info" CFBundleExecutable  2>/dev/null \
+                    || basename "$bundle" .app)
+
+        local sq_bundle; sq_bundle=$(_sq "$bundle")
+        local sq_exec;   sq_exec=$(_sq "$exec_name")
+
+        # Kill running processes, then delete the bundle
+        _record "macOS App" "$bundle" \
+            "pkill -xi '$sq_exec' 2>/dev/null; pkill -f '$sq_bundle' 2>/dev/null; sudo rm -rf '$sq_bundle'"
+
+        # Stash bundle-ID and filesystem name so steps 8-13 can search by them.
+        # We intentionally do NOT add the vendor prefix (e.g. "google", "apple")
+        # because it is far too broad and would surface unrelated apps.
+        if [[ -n $bid ]]; then
+            _extra_terms+=("$bid")
+        fi
+        local fs_name; fs_name=$(basename "$bundle" .app)
+        [[ -n $fs_name ]] && _extra_terms+=("$fs_name")
+    }
+
+    # filesystem name search
     while IFS= read -r p; do
-        [[ -n $p ]] && _record "macOS App" "$p" "sudo rm -rf '$p'"
+        [[ -n $p ]] && _process_app_bundle "$p"
     done < <(find /Applications ~/Applications /System/Applications \
-        -maxdepth 3 -iname "*${search_name}*" -name "*.app" 2>/dev/null)
+        -maxdepth 3 -iname "*${search_name}*" -name "*.app" -type d 2>/dev/null)
+
+    # Spotlight display-name search (catches apps like "Logi Options+"
+    # whose folder on disk is logioptionsplus.app)
+    if command -v mdfind &>/dev/null; then
+        while IFS= read -r p; do
+            [[ -n $p && -d $p ]] && _process_app_bundle "$p"
+        done < <(mdfind \
+            "kMDItemContentType == 'com.apple.application-bundle' \
+             && kMDItemDisplayName == '*${search_name}*'cd" 2>/dev/null)
+    fi
+
+    unset -f _process_app_bundle
 
     # ── 2. Homebrew ──────────────────────────────────────────────────────────
     step "[Homebrew formulae and casks]"
     if command -v brew &>/dev/null; then
         local f
         while IFS= read -r f; do
-            [[ -n $f ]] && _record "Homebrew formula" "$f" "brew uninstall '$f'"
+            [[ -n $f ]] && _record "Homebrew formula" "$f" "brew uninstall '$(_sq "$f")'"
         done < <(brew list --formula 2>/dev/null | grep -i "$search_name")
         while IFS= read -r f; do
-            [[ -n $f ]] && _record "Homebrew cask" "$f" "brew uninstall --cask '$f'"
+            [[ -n $f ]] && _record "Homebrew cask" "$f" "brew uninstall --cask '$(_sq "$f")'"
         done < <(brew list --cask 2>/dev/null | grep -i "$search_name")
     fi
 
@@ -666,7 +720,7 @@ run_uninstaller() {
                    "$HOME/.local/bin" "$HOME/bin"; do
         [[ -d $bin_dir ]] || continue
         while IFS= read -r p; do
-            [[ -n $p ]] && _record "Binary" "$p" "rm -f '$p'"
+            [[ -n $p ]] && _record "Binary" "$p" "rm -f '$(_sq "$p")'"
         done < <(find "$bin_dir" -maxdepth 1 -iname "*${search_name}*" 2>/dev/null)
     done
 
@@ -675,7 +729,7 @@ run_uninstaller() {
     if command -v npm &>/dev/null; then
         local pkg
         while IFS= read -r pkg; do
-            [[ -n $pkg ]] && _record "npm global" "$pkg" "npm uninstall -g '$pkg'"
+            [[ -n $pkg ]] && _record "npm global" "$pkg" "npm uninstall -g '$(_sq "$pkg")'"
         done < <(npm list -g --depth=0 2>/dev/null \
             | grep -i "$search_name" | awk -F@ '{print $1}' | awk '{print $NF}')
     fi
@@ -687,7 +741,7 @@ run_uninstaller() {
         command -v "$pip_cmd" &>/dev/null || continue
         if $pip_cmd show "$search_name" &>/dev/null; then
             _record "Python ($pip_cmd)" "$search_name" \
-                    "$pip_cmd uninstall -y '$search_name'"
+                    "$pip_cmd uninstall -y '$(_sq "$search_name")'"
             break
         fi
     done
@@ -697,7 +751,7 @@ run_uninstaller() {
     if [[ -d $HOME/.cargo/bin ]]; then
         while IFS= read -r p; do
             [[ -n $p ]] && _record "Cargo binary" "$p" \
-                "cargo uninstall '$(basename "$p")'"
+                "cargo uninstall '$(_sq "$(basename "$p")")'"
         done < <(find "$HOME/.cargo/bin" -maxdepth 1 \
             -iname "*${search_name}*" 2>/dev/null)
     fi
@@ -708,54 +762,74 @@ run_uninstaller() {
         local gem_name
         while IFS= read -r gem_name; do
             [[ -n $gem_name ]] && _record "RubyGem" "$gem_name" \
-                "gem uninstall -a '$gem_name'"
+                "gem uninstall -a '$(_sq "$gem_name")'"
         done < <(gem list 2>/dev/null | grep -i "$search_name" | awk '{print $1}')
     fi
 
+    # ── Helper: search a set of directories for a term ───────────────────────
+    # _search_dirs TYPE RM_CMD MAXDEPTH TERM DIR...
+    _search_dirs() {
+        local _type="$1" _rm="$2" _depth="$3" _term="$4"; shift 4
+        local _d _q
+        for _d in "$@"; do
+            [[ -d $_d ]] || continue
+            while IFS= read -r p; do
+                [[ -n $p ]] || continue
+                _q=$(_sq "$p")
+                _record "$_type" "$p" "${_rm//__PATH__/$_q}"
+            done < <(find "$_d" -maxdepth "$_depth" -iname "*${_term}*" 2>/dev/null)
+        done
+    }
+
+    # ── Build full term list: user query + bundle IDs found in step 1 ────────
+    local -a _all_terms=("$search_name")
+    local _t; for _t in "${_extra_terms[@]:-}"; do _all_terms+=("$_t"); done
+
     # ── 8. Application Support ───────────────────────────────────────────────
     step "[Application Support]"
-    while IFS= read -r p; do
-        [[ -n $p ]] && _record "App Support" "$p" "rm -rf '$p'"
-    done < <(find "$HOME/Library/Application Support" \
-        "/Library/Application Support" \
-        -maxdepth 1 -iname "*${search_name}*" 2>/dev/null)
+    for _t in "${_all_terms[@]}"; do
+        _search_dirs "App Support" "rm -rf '__PATH__'" 1 "$_t" \
+            "$HOME/Library/Application Support" "/Library/Application Support"
+    done
 
     # ── 9. Preferences ───────────────────────────────────────────────────────
     step "[Preferences]"
-    while IFS= read -r p; do
-        [[ -n $p ]] && _record "Preference" "$p" "rm -f '$p'"
-    done < <(find "$HOME/Library/Preferences" "/Library/Preferences" \
-        -maxdepth 1 -iname "*${search_name}*" 2>/dev/null)
+    for _t in "${_all_terms[@]}"; do
+        _search_dirs "Preference" "rm -f '__PATH__'" 1 "$_t" \
+            "$HOME/Library/Preferences" "/Library/Preferences"
+    done
 
     # ── 10. Caches ───────────────────────────────────────────────────────────
     step "[Caches]"
-    while IFS= read -r p; do
-        [[ -n $p ]] && _record "Cache" "$p" "rm -rf '$p'"
-    done < <(find "$HOME/Library/Caches" "/Library/Caches" \
-        -maxdepth 1 -iname "*${search_name}*" 2>/dev/null)
+    for _t in "${_all_terms[@]}"; do
+        _search_dirs "Cache" "rm -rf '__PATH__'" 1 "$_t" \
+            "$HOME/Library/Caches" "/Library/Caches"
+    done
 
     # ── 11. LaunchAgents / LaunchDaemons ─────────────────────────────────────
     step "[LaunchAgents / LaunchDaemons]"
-    while IFS= read -r p; do
-        [[ -n $p ]] && _record "Launch plist" "$p" \
-            "sudo launchctl unload '$p' 2>/dev/null; sudo rm -f '$p'"
-    done < <(find "$HOME/Library/LaunchAgents" \
-        "/Library/LaunchAgents" "/Library/LaunchDaemons" \
-        -maxdepth 1 -iname "*${search_name}*" 2>/dev/null)
+    for _t in "${_all_terms[@]}"; do
+        _search_dirs "Launch plist" \
+            "sudo launchctl unload '__PATH__' 2>/dev/null; sudo rm -f '__PATH__'" \
+            1 "$_t" \
+            "$HOME/Library/LaunchAgents" "/Library/LaunchAgents" "/Library/LaunchDaemons"
+    done
 
     # ── 12. Containers ───────────────────────────────────────────────────────
     step "[Containers]"
-    while IFS= read -r p; do
-        [[ -n $p ]] && _record "Container" "$p" "rm -rf '$p'"
-    done < <(find "$HOME/Library/Containers" \
-        -maxdepth 1 -iname "*${search_name}*" 2>/dev/null)
+    for _t in "${_all_terms[@]}"; do
+        _search_dirs "Container" "rm -rf '__PATH__'" 1 "$_t" \
+            "$HOME/Library/Containers"
+    done
 
     # ── 13. Logs ─────────────────────────────────────────────────────────────
     step "[Logs]"
-    while IFS= read -r p; do
-        [[ -n $p ]] && _record "Log dir" "$p" "rm -rf '$p'"
-    done < <(find "$HOME/Library/Logs" "/Library/Logs" \
-        -maxdepth 1 -iname "*${search_name}*" 2>/dev/null)
+    for _t in "${_all_terms[@]}"; do
+        _search_dirs "Log dir" "rm -rf '__PATH__'" 1 "$_t" \
+            "$HOME/Library/Logs" "/Library/Logs"
+    done
+
+    unset -f _search_dirs _sq
 
     # ── Display results ───────────────────────────────────────────────────────
     echo
