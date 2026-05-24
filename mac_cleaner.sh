@@ -515,6 +515,366 @@ _scan_and_delete() {
 }
 
 # =============================================================================
+# § interactive_menu TITLE ITEM...
+#
+#   Arrow-key navigable full-screen menu.
+#   Sets global MENU_RESULT to the 0-based index of the chosen item.
+#   Falls back to a plain numbered prompt when stdin is not a terminal.
+# =============================================================================
+interactive_menu() {
+    local title="$1"; shift
+    local -a items=("$@")
+    local -i n=${#items[@]} sel=0 i
+
+    # ── non-interactive fallback ─────────────────────────────────────────────
+    if [[ ! -t 0 ]]; then
+        printf '\n%s\n' "$title"
+        for (( i=0; i<n; i++ )); do
+            printf '  %d.  %s\n' "$(( i+1 ))" "${items[i]}"
+        done
+        printf 'Enter choice [1-%d]: ' "$n"
+        local ans; read -r ans
+        MENU_RESULT=$(( ans - 1 ))
+        (( MENU_RESULT < 0 || MENU_RESULT >= n )) && MENU_RESULT=$(( n-1 ))
+        return
+    fi
+
+    tput civis 2>/dev/null       # hide cursor while navigating
+
+    printf '\n'
+    printf "  ${BLU}%s${NC}\n" "$title"
+    printf "  ${DIM}↑ ↓ arrows  ·  Enter to select  ·  q to quit${NC}\n\n"
+
+    # ── initial render ───────────────────────────────────────────────────────
+    for (( i=0; i<n; i++ )); do
+        if (( i == sel )); then
+            printf "  ${CYN}❯  %s${NC}\n" "${items[i]}"
+        else
+            printf "  ${DIM}   %s${NC}\n" "${items[i]}"
+        fi
+    done
+
+    # ── input loop ───────────────────────────────────────────────────────────
+    local key seq
+    while true; do
+        IFS= read -rsn1 key
+
+        if [[ $key == $'\x1b' ]]; then
+            IFS= read -rsn2 -t 1 seq 2>/dev/null || seq=''
+            key="${key}${seq}"
+        fi
+
+        case $key in
+            $'\x1b[A') (( sel > 0   )) && (( sel-- )) ;;   # ↑
+            $'\x1b[B') (( sel < n-1 )) && (( sel++ )) ;;   # ↓
+            $'\x1b[H') sel=0 ;;                             # Home
+            $'\x1b[F') (( sel = n-1 )) ;;                  # End
+            '') break ;;                                    # Enter
+            q|Q) (( sel = n-1 )); break ;;                 # q → last item
+        esac
+
+        # ── redraw ───────────────────────────────────────────────────────────
+        tput cuu "$n" 2>/dev/null
+        for (( i=0; i<n; i++ )); do
+            printf '\r'; tput el 2>/dev/null
+            if (( i == sel )); then
+                printf "  ${CYN}❯  %s${NC}\n" "${items[i]}"
+            else
+                printf "  ${DIM}   %s${NC}\n" "${items[i]}"
+            fi
+        done
+    done
+
+    tput cnorm 2>/dev/null       # restore cursor
+    MENU_RESULT=$sel
+}
+
+# =============================================================================
+# § run_uninstaller
+#
+#   Prompts for an app/package name, searches every known install location,
+#   displays findings with type, path, and size, then removes confirmed items.
+#
+#   Search locations
+#     /Applications · ~/Applications — .app bundles
+#     Homebrew formula + cask
+#     CLI binary dirs (/opt/homebrew/bin, /usr/local/bin, …)
+#     npm global packages
+#     pip / pip3 packages
+#     Cargo binaries (~/.cargo/bin)
+#     RubyGems
+#     ~/Library/Application Support + /Library/Application Support
+#     ~/Library/Preferences + /Library/Preferences
+#     ~/Library/Caches + /Library/Caches
+#     ~/Library/LaunchAgents + /Library/LaunchAgents + /Library/LaunchDaemons
+#     ~/Library/Containers
+#     ~/Library/Logs + /Library/Logs
+# =============================================================================
+run_uninstaller() {
+    printf '\n'
+    printf "  ${BLU}┌─────────────────────────────────────────────────┐${NC}\n"
+    printf "  ${BLU}│  Uninstaller                                    │${NC}\n"
+    printf "  ${BLU}└─────────────────────────────────────────────────┘${NC}\n\n"
+    printf "  ${CYN}App or package name to search (case-insensitive): ${NC}"
+
+    local search_name
+    read -r search_name
+    # trim surrounding whitespace
+    search_name="${search_name#"${search_name%%[! ]*}"}"
+    search_name="${search_name%"${search_name##*[! ]}"}"
+
+    if [[ -z $search_name ]]; then
+        warn "No name entered — returning to menu."
+        echo; return
+    fi
+
+    say "Searching for: \"$search_name\""
+    echo
+
+    # ── parallel result arrays ───────────────────────────────────────────────
+    local -a _paths=() _types=() _cmds=()
+
+    _record() {   # type  path  remove_cmd
+        _types+=("$1"); _paths+=("$2"); _cmds+=("$3")
+    }
+
+    # ── 1. .app bundles ──────────────────────────────────────────────────────
+    step "[.app bundles]"
+    local p
+    while IFS= read -r p; do
+        [[ -n $p ]] && _record "macOS App" "$p" "sudo rm -rf '$p'"
+    done < <(find /Applications ~/Applications /System/Applications \
+        -maxdepth 3 -iname "*${search_name}*" -name "*.app" 2>/dev/null)
+
+    # ── 2. Homebrew ──────────────────────────────────────────────────────────
+    step "[Homebrew formulae and casks]"
+    if command -v brew &>/dev/null; then
+        local f
+        while IFS= read -r f; do
+            [[ -n $f ]] && _record "Homebrew formula" "$f" "brew uninstall '$f'"
+        done < <(brew list --formula 2>/dev/null | grep -i "$search_name")
+        while IFS= read -r f; do
+            [[ -n $f ]] && _record "Homebrew cask" "$f" "brew uninstall --cask '$f'"
+        done < <(brew list --cask 2>/dev/null | grep -i "$search_name")
+    fi
+
+    # ── 3. CLI binaries ──────────────────────────────────────────────────────
+    step "[CLI binaries]"
+    local bin_dir
+    for bin_dir in /opt/homebrew/bin /opt/homebrew/sbin \
+                   /usr/local/bin /usr/local/sbin \
+                   "$HOME/.local/bin" "$HOME/bin"; do
+        [[ -d $bin_dir ]] || continue
+        while IFS= read -r p; do
+            [[ -n $p ]] && _record "Binary" "$p" "rm -f '$p'"
+        done < <(find "$bin_dir" -maxdepth 1 -iname "*${search_name}*" 2>/dev/null)
+    done
+
+    # ── 4. npm global packages ───────────────────────────────────────────────
+    step "[npm global packages]"
+    if command -v npm &>/dev/null; then
+        local pkg
+        while IFS= read -r pkg; do
+            [[ -n $pkg ]] && _record "npm global" "$pkg" "npm uninstall -g '$pkg'"
+        done < <(npm list -g --depth=0 2>/dev/null \
+            | grep -i "$search_name" | awk -F@ '{print $1}' | awk '{print $NF}')
+    fi
+
+    # ── 5. pip packages ──────────────────────────────────────────────────────
+    step "[pip packages]"
+    local pip_cmd
+    for pip_cmd in pip3 pip; do
+        command -v "$pip_cmd" &>/dev/null || continue
+        if $pip_cmd show "$search_name" &>/dev/null; then
+            _record "Python ($pip_cmd)" "$search_name" \
+                    "$pip_cmd uninstall -y '$search_name'"
+            break
+        fi
+    done
+
+    # ── 6. Cargo binaries ────────────────────────────────────────────────────
+    step "[Cargo binaries]"
+    if [[ -d $HOME/.cargo/bin ]]; then
+        while IFS= read -r p; do
+            [[ -n $p ]] && _record "Cargo binary" "$p" \
+                "cargo uninstall '$(basename "$p")'"
+        done < <(find "$HOME/.cargo/bin" -maxdepth 1 \
+            -iname "*${search_name}*" 2>/dev/null)
+    fi
+
+    # ── 7. RubyGems ──────────────────────────────────────────────────────────
+    step "[RubyGems]"
+    if command -v gem &>/dev/null; then
+        local gem_name
+        while IFS= read -r gem_name; do
+            [[ -n $gem_name ]] && _record "RubyGem" "$gem_name" \
+                "gem uninstall -a '$gem_name'"
+        done < <(gem list 2>/dev/null | grep -i "$search_name" | awk '{print $1}')
+    fi
+
+    # ── 8. Application Support ───────────────────────────────────────────────
+    step "[Application Support]"
+    while IFS= read -r p; do
+        [[ -n $p ]] && _record "App Support" "$p" "rm -rf '$p'"
+    done < <(find "$HOME/Library/Application Support" \
+        "/Library/Application Support" \
+        -maxdepth 1 -iname "*${search_name}*" 2>/dev/null)
+
+    # ── 9. Preferences ───────────────────────────────────────────────────────
+    step "[Preferences]"
+    while IFS= read -r p; do
+        [[ -n $p ]] && _record "Preference" "$p" "rm -f '$p'"
+    done < <(find "$HOME/Library/Preferences" "/Library/Preferences" \
+        -maxdepth 1 -iname "*${search_name}*" 2>/dev/null)
+
+    # ── 10. Caches ───────────────────────────────────────────────────────────
+    step "[Caches]"
+    while IFS= read -r p; do
+        [[ -n $p ]] && _record "Cache" "$p" "rm -rf '$p'"
+    done < <(find "$HOME/Library/Caches" "/Library/Caches" \
+        -maxdepth 1 -iname "*${search_name}*" 2>/dev/null)
+
+    # ── 11. LaunchAgents / LaunchDaemons ─────────────────────────────────────
+    step "[LaunchAgents / LaunchDaemons]"
+    while IFS= read -r p; do
+        [[ -n $p ]] && _record "Launch plist" "$p" \
+            "sudo launchctl unload '$p' 2>/dev/null; sudo rm -f '$p'"
+    done < <(find "$HOME/Library/LaunchAgents" \
+        "/Library/LaunchAgents" "/Library/LaunchDaemons" \
+        -maxdepth 1 -iname "*${search_name}*" 2>/dev/null)
+
+    # ── 12. Containers ───────────────────────────────────────────────────────
+    step "[Containers]"
+    while IFS= read -r p; do
+        [[ -n $p ]] && _record "Container" "$p" "rm -rf '$p'"
+    done < <(find "$HOME/Library/Containers" \
+        -maxdepth 1 -iname "*${search_name}*" 2>/dev/null)
+
+    # ── 13. Logs ─────────────────────────────────────────────────────────────
+    step "[Logs]"
+    while IFS= read -r p; do
+        [[ -n $p ]] && _record "Log dir" "$p" "rm -rf '$p'"
+    done < <(find "$HOME/Library/Logs" "/Library/Logs" \
+        -maxdepth 1 -iname "*${search_name}*" 2>/dev/null)
+
+    # ── Display results ───────────────────────────────────────────────────────
+    echo
+    local -i total=${#_paths[@]}
+
+    if (( total == 0 )); then
+        warn "Nothing found for \"$search_name\"."
+        echo; return
+    fi
+
+    say "Found ${total} item(s) matching \"${search_name}\":"
+    echo
+    printf "  ${DIM}  #   %-20s  %-8s  %s${NC}\n" "TYPE" "SIZE" "PATH"
+    printf "  ${DIM}  ─   ────────────────────  ────────  $(printf '─%.0s' {1..50})${NC}\n"
+
+    local -i i
+    local sz
+    for (( i=0; i<total; i++ )); do
+        sz=''
+        [[ -e ${_paths[i]} ]] && sz=$(du -sh "${_paths[i]}" 2>/dev/null | awk '{print $1}')
+        printf "  ${CYN}[%2d]${NC}  %-20s  ${DIM}%-8s${NC}  %s\n" \
+            "$(( i+1 ))" "${_types[i]}" "${sz:----}" "${_paths[i]}"
+    done
+
+    echo
+    printf "  ${YLW}Remove all ${total} items? [y/N]  or enter numbers e.g. \"1 3 5\": ${NC}"
+    local answer
+    read -r answer
+
+    # ── determine which indices to act on ────────────────────────────────────
+    local -a to_remove=()
+    if [[ $answer == [yY] ]]; then
+        for (( i=0; i<total; i++ )); do to_remove+=("$i"); done
+    elif [[ -n $answer ]]; then
+        local num
+        for num in $answer; do
+            if [[ $num =~ ^[0-9]+$ ]] && (( num >= 1 && num <= total )); then
+                to_remove+=("$(( num-1 ))")
+            fi
+        done
+    fi
+
+    if (( ${#to_remove[@]} == 0 )); then
+        info "Nothing removed — returning to menu."
+        echo; return
+    fi
+
+    echo
+    say "Removing ${#to_remove[@]} item(s)…"
+    echo
+
+    local -i removed=0 failed=0 rc
+    for i in "${to_remove[@]}"; do
+        step "[${_types[i]}]  ${_paths[i]}"
+        info "cmd : ${_cmds[i]}"
+        rc=0
+        eval "${_cmds[i]}" >/dev/null 2>&1 || rc=$?
+        if (( rc == 0 )); then
+            (( removed++ ))
+            ok "removed ← ${_paths[i]}"
+        else
+            (( failed++ ))
+            warn "failed (exit=${rc}) ← ${_paths[i]}"
+        fi
+        echo
+    done
+
+    say "Done — removed: ${removed}   failed: ${failed}"
+    echo
+
+    # unset local helper so it doesn't leak into global scope
+    unset -f _record
+}
+
+# =============================================================================
+# § show_main_menu
+#
+#   Entry point for the script. Shows the three-item main menu and dispatches
+#   to run_clean, run_uninstaller, or exit based on user selection.
+#   After run_uninstaller completes, the menu is shown again so the user can
+#   uninstall multiple items or switch to another action.
+# =============================================================================
+show_main_menu() {
+    clear 2>/dev/null || true
+
+    printf '\n'
+    printf "  ${BLU}╔══════════════════════════════════════════════════════╗${NC}\n"
+    printf "  ${BLU}║   macOS Cleaner  ·  v1.0.0                          ║${NC}\n"
+    printf "  ${BLU}╠══════════════════════════════════════════════════════╣${NC}\n"
+    printf "  ${BLU}║   Safe disk-space cleaner for developers             ║${NC}\n"
+    printf "  ${BLU}║   Disk: %-44s║${NC}\n" "$(disk_free)"
+    printf "  ${BLU}╚══════════════════════════════════════════════════════╝${NC}\n"
+
+    local -a items=(
+        "Run full cleanup   (caches · logs · package stores · Trash)"
+        "Uninstall an app or package"
+        "Exit"
+    )
+
+    MENU_RESULT=2
+    interactive_menu "What would you like to do?" "${items[@]}"
+
+    printf '\n'
+    case $MENU_RESULT in
+        0) run_clean ;;
+        1) run_uninstaller; show_main_menu ;;
+        *) say "Bye."; printf '\n'; exit 0 ;;
+    esac
+}
+
+# =============================================================================
+# § run_clean
+#
+#   Full cleanup flow — all 28 sections.
+#   Called from show_main_menu when the user selects option 1.
+# =============================================================================
+run_clean() {
+
+# =============================================================================
 # § STARTUP BANNER
 # =============================================================================
 echo
@@ -1266,3 +1626,10 @@ ok   "Cleanup complete."
 echo
 printf 'Tip: restart your Mac to release caches still held by running processes.\n'
 printf 'Note: apps rebuild their caches on next launch — first start may be slightly slower.\n'
+
+}   # end run_clean
+
+# =============================================================================
+# § ENTRY POINT
+# =============================================================================
+show_main_menu
