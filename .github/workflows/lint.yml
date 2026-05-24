@@ -1,0 +1,23 @@
+name: Lint
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  shellcheck:
+    name: ShellCheck + syntax
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: brew install shellcheck
+
+      - name: Bash syntax check (system bash 3.2)
+        run: /bin/bash -n mac_cleaner.sh
+
+      - name: ShellCheck
+        run: shellcheck --severity=warning mac_cleaner.sh
