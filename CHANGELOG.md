@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.1.0] — 2026-05-31
+
+### Added
+- Multi-select "Cleanup & maintenance" menu — choose which actions to run via a checkbox
+  list (space toggle · `a` select-all · Enter run · `q` cancel); selected actions execute as
+  an ordered queue, in list order
+- New maintenance action: **Flush DNS cache** (`dscacheutil -flushcache` + restart `mDNSResponder`)
+- New maintenance action: **Free common dev ports** — force-kills processes on a curated
+  dev-port list (3000, 5173, 8080, 9229, …); never targets system services or the running shell
+- New maintenance action: **Kill all open apps** — quits visible GUI apps (graceful then force),
+  always sparing terminal emulators, code editors / IDEs, and Finder, with a `y/N` confirmation
+  (`KILL_APPS_ASSUME_YES=1` to opt in non-interactively)
+- TUI polish — animated braille spinner, colored progress bar, and styled banners
+- `KILL_APPS_ASSUME_YES` environment override
+
+### Changed
+- Split the single `mac_cleaner.sh` into a thin entry point plus focused `lib/*.sh` and
+  `lib/actions/*.sh` modules sourced in dependency order (behavior unchanged for cleanup)
+- Maintenance actions are wired through an open/closed action registry in `lib/menu.sh`
+- Rewrote the README with architecture and runtime-flow diagrams
+
+---
+
 ## [1.0.0] — 2026-05-24
 
 ### Added
