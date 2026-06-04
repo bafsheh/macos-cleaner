@@ -10,24 +10,38 @@
 #   say   — top-level announcement      info  — indented detail
 #   step  — sub-step heading            ok    — success line
 #   warn  — non-fatal warning           fail  — failure line
-#   section — GitHub-style banner heading
+#   section — bold banner heading       hr    — thin divider rule
 # =============================================================================
 
 _log()    { printf '%b\n' "$*" | tee -a "$LOG_FILE"; }
-say()     { _log "${BLU}==>${NC} $*"; }
-step()    { _log "${CYN}  →${NC} $*"; }
-info()    { _log "${DIM}    $*${NC}"; }
-ok()      { _log "${GRN}  ✓${NC} $*"; }
-warn()    { _log "${YLW}  !${NC} $*"; }
-fail()    { _log "${RED}  ✗${NC} $*"; }
 
-# GitHub-style section banner ─ renders as a visible heading in the log
+# ── status lines ─────────────────────────────────────────────────────────────
+#   A consistent two-space gutter + coloured glyph gives every line an obvious
+#   severity at a glance; detail lines indent one level deeper so scanning the
+#   output reads as an outline.
+say()     { _log "${BBLU}❯${NC} ${BOLD}$*${NC}"; }
+step()    { _log "  ${BCYN}▸${NC} ${BOLD}$*${NC}"; }
+info()    { _log "    ${DIM}$*${NC}"; }
+ok()      { _log "  ${BGRN}✓${NC} $*"; }
+warn()    { _log "  ${BYLW}▲${NC} ${YLW}$*${NC}"; }
+fail()    { _log "  ${BRED}✗${NC} ${RED}$*${NC}"; }
+
+# ── thin divider rule (optional visual breather between groups) ──────────────
+hr() {
+    local -i width=${1:-72}
+    local rule; rule=$(printf '·%.0s' $(seq 1 "$width"))
+    _log "  ${GRY}${rule}${NC}"
+}
+
+# ── bold section banner ──────────────────────────────────────────────────────
+#   Renders as a clearly weighted heading: a heavy top corner with the title in
+#   bright white, underlined by a full-width rule. Far more prominent than body
+#   text — the closest a terminal gets to "larger" text.
 section() {
     local title="$1"
-    local rule; rule=$(printf '─%.0s' {1..76})
+    local rule; rule=$(printf '━%.0s' $(seq 1 70))
     _log ""
-    _log "${BLU}# ${rule}${NC}"
-    _log "${BLU}# § ${title}${NC}"
-    _log "${BLU}# ${rule}${NC}"
+    _log "${TEAL}${BOLD}┏━━ ${WHT}${title}${NC}"
+    _log "${TEAL}┗${rule}${NC}"
     _log ""
 }

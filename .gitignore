@@ -7,3 +7,12 @@
 
 # Log files produced by the script itself
 mac_cleaner_*.log
+
+# Editor / AI assistant tooling (never commit)
+.claude/
+.cursor/
+.aider*
+.github/copilot-instructions.md
+CLAUDE.md
+.vscode/
+.idea/

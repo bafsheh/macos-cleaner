@@ -2,7 +2,7 @@
 # =============================================================================
 # § lib/actions/cleanup.sh  ·  Full disk-space cleanup action
 #
-#   run_clean — the comprehensive cleanup flow (28 sections: Trash, caches,
+#   run_clean — the comprehensive cleanup flow (29 sections: Trash, caches,
 #   logs, package-manager stores across every major language/tool ecosystem).
 #   Registered in the action registry as the "Clean up" queue item.
 #
@@ -13,7 +13,7 @@
 # =============================================================================
 # § run_clean
 #
-#   Full cleanup flow — all 28 sections.
+#   Full cleanup flow — all 29 sections.
 #   Called from show_main_menu when the user selects option 1.
 # =============================================================================
 run_clean() {
@@ -673,21 +673,72 @@ say "Mail download caches"
 clean_dir "$HOME/Library/Containers/com.apple.mail/Data/Library/Caches"  "Mail caches"
 
 # =============================================================================
-# § 25 · TIME MACHINE LOCAL SNAPSHOTS
+# § 25 · MICROSOFT OFFICE, TEAMS & OUTLOOK
+#   Word · Excel · PowerPoint · Outlook · OneNote · Teams · OneDrive · Edge ·
+#   AutoUpdate · Remote Desktop.
+#
+#   Cache-only: each app's container CACHES are cleared, never its Data store.
+#   Outlook's local mail database, account state, and signatures all live
+#   OUTSIDE the Caches folder, so they are left untouched.
+# =============================================================================
+section "25 · MICROSOFT OFFICE, TEAMS & OUTLOOK"
+
+say "Microsoft app caches (documents, accounts, and mail are preserved)"
+
+# ── Office apps — sandboxed container caches ─────────────────────────────────
+clean_dir "$HOME/Library/Containers/com.microsoft.Word/Data/Library/Caches"        "Word cache"
+clean_dir "$HOME/Library/Containers/com.microsoft.Excel/Data/Library/Caches"       "Excel cache"
+clean_dir "$HOME/Library/Containers/com.microsoft.Powerpoint/Data/Library/Caches"  "PowerPoint cache"
+clean_dir "$HOME/Library/Containers/com.microsoft.onenote.mac/Data/Library/Caches" "OneNote cache"
+clean_dir "$HOME/Library/Containers/com.microsoft.Outlook/Data/Library/Caches"     "Outlook cache (mail DB preserved)"
+
+# ── Microsoft Teams (new / v2) ───────────────────────────────────────────────
+clean_dir "$HOME/Library/Containers/com.microsoft.teams2/Data/Library/Caches"            "Teams cache"
+clean_dir "$HOME/Library/Group Containers/UBF8T346G9.com.microsoft.teams/Library/Caches" "Teams shared cache"
+# classic Teams (legacy, non-sandboxed)
+clean_dir "$HOME/Library/Application Support/Microsoft/Teams/Cache"                "Teams (classic) Cache"
+clean_dir "$HOME/Library/Application Support/Microsoft/Teams/Code Cache"           "Teams (classic) Code Cache"
+clean_dir "$HOME/Library/Application Support/Microsoft/Teams/GPUCache"             "Teams (classic) GPUCache"
+
+# ── OneDrive · Remote Desktop ────────────────────────────────────────────────
+clean_dir "$HOME/Library/Containers/com.microsoft.OneDrive-mac/Data/Library/Caches" "OneDrive cache"
+clean_dir "$HOME/Library/Caches/com.microsoft.OneDrive"                             "OneDrive cache (Library)"
+clean_dir "$HOME/Library/Containers/com.microsoft.rdc.macos/Data/Library/Caches"    "Remote Desktop cache"
+
+# ── non-sandboxed / legacy caches ────────────────────────────────────────────
+clean_dir "$HOME/Library/Caches/com.microsoft.Word"        "Word cache (Library)"
+clean_dir "$HOME/Library/Caches/com.microsoft.Excel"       "Excel cache (Library)"
+clean_dir "$HOME/Library/Caches/com.microsoft.Powerpoint"  "PowerPoint cache (Library)"
+clean_dir "$HOME/Library/Caches/com.microsoft.Outlook"     "Outlook cache (Library)"
+clean_dir "$HOME/Library/Caches/com.microsoft.onenote.mac" "OneNote cache (Library)"
+
+# ── Microsoft AutoUpdate ─────────────────────────────────────────────────────
+clean_dir "$HOME/Library/Caches/com.microsoft.autoupdate2"     "Microsoft AutoUpdate cache"
+clean_dir "$HOME/Library/Caches/com.microsoft.autoupdate.fba"  "Microsoft AutoUpdate (fba) cache"
+
+# ── Microsoft Edge (Chromium) — Default profile caches ───────────────────────
+clean_dir "$HOME/Library/Caches/com.microsoft.edgemac"                                           "Edge cache (Library)"
+clean_dir "$HOME/Library/Application Support/Microsoft Edge/Default/Cache"                        "Edge Default Cache"
+clean_dir "$HOME/Library/Application Support/Microsoft Edge/Default/Code Cache"                   "Edge Default Code Cache"
+clean_dir "$HOME/Library/Application Support/Microsoft Edge/Default/GPUCache"                     "Edge Default GPUCache"
+clean_dir "$HOME/Library/Application Support/Microsoft Edge/Default/Service Worker/CacheStorage"  "Edge Service Worker cache"
+
+# =============================================================================
+# § 26 · TIME MACHINE LOCAL SNAPSHOTS
 #
 #   macOS stores local "on-disk" TM snapshots so Time Machine can roll back
 #   even when the backup drive is disconnected.  They can accumulate to many
 #   GBs on laptops.  Deleting them is safe: your remote TM backup is untouched.
 # =============================================================================
-section "25 · TIME MACHINE LOCAL SNAPSHOTS"
+section "26 · TIME MACHINE LOCAL SNAPSHOTS"
 
 say "Listing and deleting Time Machine local (on-disk) snapshots"
 clean_tm_snapshots
 
 # =============================================================================
-# § 26 · QUICK LOOK & iOS DEVICE UPDATES
+# § 27 · QUICK LOOK & iOS DEVICE UPDATES
 # =============================================================================
-section "26 · QUICK LOOK & iOS DEVICE UPDATES"
+section "27 · QUICK LOOK & iOS DEVICE UPDATES"
 
 say "Quick Look thumbnail cache and old iOS update files"
 run_step "Quick Look cache regenerate"  "qlmanage -r cache"
@@ -695,9 +746,9 @@ clean_dir "$HOME/Library/iTunes/iPhone Software Updates"  "Old iOS update files"
 clean_dir "$HOME/Library/iTunes/iPad Software Updates"    "Old iPadOS update files"
 
 # =============================================================================
-# § 27 · SYSTEM CACHES & LOGS  (requires sudo)
+# § 28 · SYSTEM CACHES & LOGS  (requires sudo)
 # =============================================================================
-section "27 · SYSTEM CACHES & LOGS (sudo)"
+section "28 · SYSTEM CACHES & LOGS (sudo)"
 
 say "System-level caches, ASL logs, and rotated logs"
 if sudo -n true 2>/dev/null || sudo -v; then
@@ -735,9 +786,9 @@ else
 fi
 
 # =============================================================================
-# § 28 · OLD /tmp ITEMS  (>3 days)
+# § 29 · OLD /tmp ITEMS  (>3 days)
 # =============================================================================
-section "28 · OLD /tmp ITEMS"
+section "29 · OLD /tmp ITEMS"
 
 say "Removing items older than 3 days from /tmp directories"
 clean_old_tmp "/private/tmp"        "/private/tmp"        "sudo"

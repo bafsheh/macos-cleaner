@@ -5,6 +5,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.2.0] — 2026-06-05
+
+### Added
+- New maintenance action: **Free up memory** — releases inactive & cached RAM via `sudo purge`,
+  with a before/after `vm_stat` snapshot (free + reclaimable estimate); never quits your apps
+- New **opt-in** action: **Docker — full teardown** — stops & removes ALL containers, removes ALL
+  images, prunes networks + build cache (volumes are a separate opt-in). Requires `y/N` confirmation;
+  `DOCKER_CLEAN_ASSUME_YES=1` (+ `DOCKER_CLEAN_VOLUMES=1`) to opt in non-interactively
+- New **opt-in** action: **Ollama / llama — full wipe** — removes every Ollama model (via `ollama rm`,
+  then the on-disk store), caches, logs, history, and Meta `~/.llama` checkpoints. Requires confirmation;
+  `OLLAMA_CLEAN_ASSUME_YES=1` to opt in. (llama.cpp `.gguf` files are user-placed and left untouched.)
+- New cleanup section **§ 25 · Microsoft Office, Teams & Outlook** in the safe "Clean up" run —
+  cache-only clearing for Word, Excel, PowerPoint, OneNote, Outlook, Teams (new + classic), OneDrive,
+  Remote Desktop, AutoUpdate, and Edge. Outlook's local mail database and account state are preserved.
+- **Shut down when done** — a toggle in the cleanup checklist that powers the Mac off (graceful, no
+  sudo) after all selected actions finish, behind a cancellable countdown (`SHUTDOWN_DELAY`, default 15s)
+- **Back** row — every selection screen can return to the main menu; the cleanup list always shows the
+  shutdown toggle second-to-last and **Back** as the final row. "Select all" / `a` no longer arm them.
+
+### Changed
+- TUI overhaul — auto colour detection (honours `NO_COLOR`, `CLICOLOR_FORCE`, non-TTY); a richer,
+  more legible palette; bolder section banners; highlighted menu selection; a truecolor green→azure
+  gradient progress bar; and a spinner with a live elapsed-seconds counter and gentle colour pulse
+
+---
+
 ## [1.1.0] — 2026-05-31
 
 ### Added
