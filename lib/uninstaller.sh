@@ -35,6 +35,7 @@ run_uninstaller() {
     printf "  ${BLU}┌─────────────────────────────────────────────────┐${NC}\n"
     printf "  ${BLU}│  Uninstaller                                    │${NC}\n"
     printf "  ${BLU}└─────────────────────────────────────────────────┘${NC}\n\n"
+    printf "  ${DIM}Leave blank and press Enter to go back to the main menu.${NC}\n"
     printf "  ${CYN}App or package name to search (case-insensitive): ${NC}"
 
     local search_name
