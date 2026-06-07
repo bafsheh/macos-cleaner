@@ -2,8 +2,9 @@
 # =============================================================================
 # § lib/actions/cleanup.sh  ·  Full disk-space cleanup action
 #
-#   run_clean — the comprehensive cleanup flow (29 sections: Trash, caches,
-#   logs, package-manager stores across every major language/tool ecosystem).
+#   run_clean — the comprehensive cleanup flow (32 sections: Trash, caches,
+#   logs, package-manager stores across every major language/tool ecosystem,
+#   plus Microsoft/Adobe/Photos app caches and a safe "System Data" sweep).
 #   Registered in the action registry as the "Clean up" queue item.
 #
 #   Requires (sourced earlier): colors.sh, core.sh, logging.sh, helpers.sh
@@ -13,7 +14,7 @@
 # =============================================================================
 # § run_clean
 #
-#   Full cleanup flow — all 29 sections.
+#   Full cleanup flow — all 32 sections.
 #   Called from show_main_menu when the user selects option 1.
 # =============================================================================
 run_clean() {
@@ -59,7 +60,9 @@ done
 section "2 · USER CACHES & LOGS"
 
 say "User Library caches and logs"
-clean_dir "$HOME/Library/Caches"                              "User Library Caches"
+# Swept per-subfolder (NOT a blanket wipe) so iCloud-sync staging caches
+# (com.apple.bird · CloudKit · CloudDocs — may hold un-uploaded data) are skipped.
+sweep_caches "User Library Caches" "$HOME/Library/Caches" "$HOME/Library/Caches/*"
 clean_dir "$HOME/Library/Logs"                                "User Logs"
 clean_dir "$HOME/Library/Application Support/CrashReporter"  "User Crash Reports"
 clean_dir "$HOME/Library/Saved Application State"             "Saved Application State"
@@ -724,21 +727,78 @@ clean_dir "$HOME/Library/Application Support/Microsoft Edge/Default/GPUCache"   
 clean_dir "$HOME/Library/Application Support/Microsoft Edge/Default/Service Worker/CacheStorage"  "Edge Service Worker cache"
 
 # =============================================================================
-# § 26 · TIME MACHINE LOCAL SNAPSHOTS
+# § 26 · ADOBE CREATIVE CLOUD
+#   Photoshop · Premiere Pro · After Effects · Lightroom · Illustrator ·
+#   Bridge · Creative Cloud desktop.
+#
+#   Cache-only: the shared Media Cache (video/audio conform + peak files) and
+#   per-app caches/logs are cleared. These regenerate from your source media on
+#   next launch. Project files, libraries, presets, and settings are NOT touched.
+# =============================================================================
+section "26 · ADOBE CREATIVE CLOUD"
+
+say "Adobe shared media caches, app caches, and logs (projects & presets preserved)"
+
+# ── shared media cache (Premiere / After Effects / Audition) — often many GB ─
+clean_dir "$HOME/Library/Application Support/Adobe/Common/Media Cache Files"  "Adobe Media Cache Files"
+clean_dir "$HOME/Library/Application Support/Adobe/Common/Media Cache"        "Adobe Media Cache"
+clean_dir "$HOME/Library/Application Support/Adobe/Common/Peak Files"         "Adobe Peak Files (audio waveforms)"
+clean_dir "$HOME/Library/Application Support/Adobe/CameraRaw/Cache"           "Camera Raw cache"
+
+# ── per-app + generic caches ─────────────────────────────────────────────────
+clean_dir "$HOME/Library/Caches/Adobe"                                        "Adobe caches (Library)"
+clean_dir "$HOME/Library/Caches/com.adobe.Photoshop"                          "Photoshop cache (Library)"
+clean_dir "$HOME/Library/Caches/com.adobe.PremierePro"                        "Premiere Pro cache (Library)"
+clean_dir "$HOME/Library/Caches/com.adobe.AfterEffects"                       "After Effects cache (Library)"
+clean_dir "$HOME/Library/Caches/com.adobe.illustrator"                        "Illustrator cache (Library)"
+clean_dir "$HOME/Library/Caches/com.adobe.acc.AdobeCreativeCloud"             "Creative Cloud desktop cache"
+clean_dir "$HOME/Library/Caches/CSXS"                                         "Adobe CEP/CSXS cache"
+
+# ── logs ─────────────────────────────────────────────────────────────────────
+clean_dir "$HOME/Library/Logs/Adobe"                                          "Adobe logs"
+clean_dir "$HOME/Library/Logs/CreativeCloud"                                  "Creative Cloud logs"
+
+# =============================================================================
+# § 27 · PHOTOS  (caches only — your library is never touched)
+#
+#   Cleans ONLY the Photos app's regenerable caches that live OUTSIDE the
+#   library bundle. The ~/Pictures/*.photoslibrary package (originals, edits,
+#   albums, faces) is irreplaceable user data: it is NEVER modified, because
+#   deleting files inside it can corrupt the library and force a full rebuild.
+# =============================================================================
+section "27 · PHOTOS (caches only)"
+
+say "Photos app caches (your photo library is never touched)"
+clean_dir "$HOME/Library/Caches/com.apple.Photos"                          "Photos app cache"
+clean_dir "$HOME/Library/Caches/com.apple.photolibraryd"                   "photolibraryd cache"
+clean_dir "$HOME/Library/Caches/com.apple.photoanalysisd"                  "photoanalysisd cache"
+clean_dir "$HOME/Library/Containers/com.apple.Photos/Data/Library/Caches"  "Photos container cache"
+
+# Informational only — the library itself is left untouched (no du scan: it can
+# be huge). Match ANY *.photoslibrary in ~/Pictures (the default name is
+# localized and users rename/keep several), not just the English default.
+if [[ -n "$(find "$HOME/Pictures" -maxdepth 1 -name '*.photoslibrary' -print -quit 2>/dev/null)" ]]; then
+    info "Photos Library detected — originals & edits are NEVER deleted."
+    info "  reclaim space via Photos ▸ Recently Deleted, or System Settings ▸"
+    info "  Apple Account ▸ iCloud ▸ Photos ▸ 'Optimise Mac Storage'."
+fi
+
+# =============================================================================
+# § 28 · TIME MACHINE LOCAL SNAPSHOTS
 #
 #   macOS stores local "on-disk" TM snapshots so Time Machine can roll back
 #   even when the backup drive is disconnected.  They can accumulate to many
 #   GBs on laptops.  Deleting them is safe: your remote TM backup is untouched.
 # =============================================================================
-section "26 · TIME MACHINE LOCAL SNAPSHOTS"
+section "28 · TIME MACHINE LOCAL SNAPSHOTS"
 
 say "Listing and deleting Time Machine local (on-disk) snapshots"
 clean_tm_snapshots
 
 # =============================================================================
-# § 27 · QUICK LOOK & iOS DEVICE UPDATES
+# § 29 · QUICK LOOK & iOS DEVICE UPDATES
 # =============================================================================
-section "27 · QUICK LOOK & iOS DEVICE UPDATES"
+section "29 · QUICK LOOK & iOS DEVICE UPDATES"
 
 say "Quick Look thumbnail cache and old iOS update files"
 run_step "Quick Look cache regenerate"  "qlmanage -r cache"
@@ -746,9 +806,9 @@ clean_dir "$HOME/Library/iTunes/iPhone Software Updates"  "Old iOS update files"
 clean_dir "$HOME/Library/iTunes/iPad Software Updates"    "Old iPadOS update files"
 
 # =============================================================================
-# § 28 · SYSTEM CACHES & LOGS  (requires sudo)
+# § 30 · SYSTEM CACHES & LOGS  (requires sudo)
 # =============================================================================
-section "28 · SYSTEM CACHES & LOGS (sudo)"
+section "30 · SYSTEM CACHES & LOGS (sudo)"
 
 say "System-level caches, ASL logs, and rotated logs"
 if sudo -n true 2>/dev/null || sudo -v; then
@@ -786,13 +846,58 @@ else
 fi
 
 # =============================================================================
-# § 29 · OLD /tmp ITEMS  (>3 days)
+# § 31 · OLD /tmp ITEMS  (>3 days)
 # =============================================================================
-section "29 · OLD /tmp ITEMS"
+section "31 · OLD /tmp ITEMS"
 
 say "Removing items older than 3 days from /tmp directories"
 clean_old_tmp "/private/tmp"        "/private/tmp"        "sudo"
 clean_old_tmp "user TMPDIR"         "${TMPDIR:-/tmp}"
+
+# =============================================================================
+# § 32 · SYSTEM DATA  (app cache sweep · diagnostics · informational)
+#
+#   "System Data" in Storage settings is a residual catch-all — everything not
+#   counted as Apps/Photos/Documents/etc. The portion that is genuinely safe to
+#   reclaim is regenerable app caches and crash reports, handled here. The other
+#   big contributors are deliberately left alone:
+#     • Time Machine local snapshots → §28 (blessed tmutil thinning)
+#     • system caches / logs (sudo)  → §30
+#     • core OS / SSV-sealed files   → UNSAFE, never touched
+#     • iOS device backups           → irreplaceable user data → REPORTED only
+#     • the Photos .photoslibrary    → see §27 (never touched)
+#
+#   NB: we intentionally do NOT blanket-wipe ~/Library/Caches — CloudKit
+#   (com.apple.bird) can stage un-uploaded user data there. We sweep only the
+#   per-app sandbox cache subfolders, which regenerate cleanly.
+# =============================================================================
+section "32 · SYSTEM DATA (app caches · diagnostics)"
+
+say "Reclaiming regenerable app caches counted under \"System Data\""
+
+# ── per-app sandbox caches (regenerate on next launch) ───────────────────────
+sweep_caches "App container caches"   "$HOME/Library/Containers"        "*/Data/Library/Caches"
+sweep_caches "Group container caches" "$HOME/Library/Group Containers"  "*/Library/Caches"
+
+# ── crash / diagnostic reports (post-mortem artefacts; safe to remove) ───────
+clean_dir "$HOME/Library/Logs/DiagnosticReports"  "User crash & diagnostic reports"
+if sudo -n true 2>/dev/null; then
+    clean_dir "/Library/Logs/DiagnosticReports"   "System crash & diagnostic reports" "sudo"
+else
+    step "[System crash & diagnostic reports]"
+    info "status  : needs sudo (only granted if you authorised §30) — skipped"
+    echo
+fi
+
+# ── informational only: large, IRREPLACEABLE items we never auto-delete ──────
+say "Large items counted as System Data that are NEVER auto-deleted:"
+_ios_backup="$HOME/Library/Application Support/MobileSync/Backup"
+if [[ -d $_ios_backup ]]; then
+    info "iOS/iPadOS backups : $(human_size "$(dir_size_kb "$_ios_backup")")  (~/Library/Application Support/MobileSync/Backup)"
+    info "  → manage in Finder ▸ select device ▸ Manage Backups to remove old device backups."
+fi
+info "Tip: in Disk Utility choose View ▸ Show APFS Snapshots to see snapshot and"
+info "     purgeable space — the most accurate view of reclaimable System Data."
 
 # =============================================================================
 # § SUMMARY

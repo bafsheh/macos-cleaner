@@ -210,6 +210,89 @@ skip_missing() {
 }
 
 # =============================================================================
+# § sweep_caches LABEL BASE PATH_PATTERN
+#
+#   Bulk-clears the *contents* of every cache directory under BASE whose full
+#   path matches PATH_PATTERN (a find(1) -path glob, e.g. "*/Data/Library/Caches"
+#   for app sandbox containers). Each match is treated as regenerable cache — the
+#   directory itself is preserved, only its contents are removed.
+#
+#   Unlike clean_dir (one verbose block per path), this aggregates many matches
+#   into a single compact summary, which matters when sweeping the dozens of app
+#   containers that make up macOS "System Data". Per-directory deletes honour
+#   DIR_TIMEOUT; the global counters are updated once for the whole sweep.
+#
+#   Uses find + `while read` (not shell globbing) so paths containing spaces —
+#   e.g. "~/Library/Group Containers" — are handled correctly.
+#
+#   SAFETY: iCloud sync daemons stage *un-uploaded* user data under their own
+#   container Caches (research-verified for com.apple.bird / CloudKit). Any
+#   container whose path matches SWEEP_SKIP_RE is skipped and reported, never
+#   wiped — losing those would lose data that has not yet reached iCloud.
+# =============================================================================
+# Matches any iCloud-sync staging container/cache that may hold un-uploaded user
+# data: com.apple.bird (legacy iCloud Drive), cloudd/CloudKit, the Photos sync
+# daemon, and the modern iCloud Drive file-provider (com.apple.CloudDocs.*). The
+# bare CloudKit / iCloud tokens also catch ~/Library/Caches/CloudKit and any
+# future iCloud* dir. Over-skipping a cache is harmless; under-skipping is not.
+declare -r SWEEP_SKIP_RE='com\.apple\.(bird|cloudd|cloudphotosd|CloudPhotos|CloudDocs|protectedcloudstorage)|CloudKit|iCloud'
+
+sweep_caches() {
+    local label="$1" base="$2" pattern="$3"
+
+    step "[$label]"
+    info "scan    : $base  (match: $pattern)"
+
+    if [[ ! -d $base ]]; then
+        info "status  : not present — nothing to do"
+        (( TOTAL_SKIPPED_MISSING++ ))
+        echo; return 0
+    fi
+
+    # Enumerate matching cache dirs first (‑prune: don't descend into a match).
+    local -a dirs=()
+    local d
+    local -i skipped=0
+    while IFS= read -r d; do
+        [[ -n $d ]] || continue
+        # Never touch iCloud-sync staging caches (may hold un-uploaded data).
+        if [[ $d =~ $SWEEP_SKIP_RE ]]; then
+            (( skipped++ )); continue
+        fi
+        dirs+=("$d")
+    done < <(find "$base" -maxdepth 5 -type d -path "$pattern" -prune 2>/dev/null)
+
+    (( skipped > 0 )) && info "skipped : ${skipped} iCloud-sync cache(s) (may hold un-uploaded data)"
+
+    if (( ${#dirs[@]} == 0 )); then
+        info "status  : no matching cache directories"
+        echo; return 0
+    fi
+
+    info "found   : ${#dirs[@]} cache director(ies)"
+
+    local -i swept=0 freed_total=0 before after freed rc t0 t1
+    t0=$(date +%s)
+    for d in "${dirs[@]}"; do
+        before=$(dir_size_kb "$d")
+        (( before == 0 )) && continue
+        rc=0
+        run_timeout "$DIR_TIMEOUT" find "$d" -mindepth 1 -delete 2>/dev/null || rc=$?
+        after=$(dir_size_kb "$d")
+        (( freed = before - after )) || true
+        (( freed < 0 )) && freed=0
+        (( freed_total += freed ))
+        (( freed > 0 )) && (( swept++ ))
+    done
+    t1=$(date +%s)
+
+    (( TOTAL_FREED_KB += freed_total ))
+    (( TOTAL_CLEANED++ ))
+    ok "freed $(human_size $freed_total) across ${swept}/${#dirs[@]} cache dir(s) in $(( t1 - t0 ))s ← $label"
+    echo
+}
+
+# =============================================================================
 # § clean_old_tmp LABEL PATH [SUDO_PREFIX]
 #
 #   Removes items inside PATH that have not been modified in >3 days.

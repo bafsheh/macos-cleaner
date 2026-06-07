@@ -19,6 +19,34 @@
 # =============================================================================
 
 # =============================================================================
+# § line-wrap control  (fixes the "menu walks down the screen" glitch)
+#
+#   Both arrow menus redraw by moving the cursor up exactly one line per row
+#   (tput cuu N) and repainting. That math is only correct when every row
+#   occupies a single physical line. A label wider than the window would wrap
+#   onto a second line, the cursor-up would land too low, and each keypress
+#   would repaint a fresh copy below the old one — the menu appears to repeat.
+#
+#   We turn the terminal's automatic line-wrap OFF (DECAWM, ESC[?7l) while a
+#   menu is on screen so an over-long label is truncated at the right edge
+#   instead of wrapping, keeping one row == one line. Restored (ESC[?7h) on
+#   exit. Raw escapes are used (not tput) so it works even where terminfo is
+#   thin; both are no-ops unless stdout is a TTY.
+# =============================================================================
+_ui_wrap_off() { [[ -t 1 ]] && printf '\033[?7l'; }
+_ui_wrap_on()  { [[ -t 1 ]] && printf '\033[?7h'; }
+
+# Safety net: restore terminal state (auto-wrap ON + cursor visible) on ANY exit,
+# including Ctrl-C mid-menu. The widgets restore inline on a normal return; this
+# trap covers the abnormal paths (SIGINT/SIGTERM) the inline code can't reach,
+# so a wrapped-off DECAWM never persists into the user's shell. The [[ -t 1 ]]
+# guard keeps the escapes out of redirected stdout and command-sub subshells.
+_ui_term_restore() { [[ -t 1 ]] || return 0; printf '\033[?7h'; tput cnorm 2>/dev/null; }
+trap '_ui_term_restore' EXIT
+trap '_ui_term_restore; exit 130' INT
+trap '_ui_term_restore; exit 143' TERM
+
+# =============================================================================
 # § interactive_menu TITLE ITEM...
 #
 #   Arrow-key navigable full-screen menu.
@@ -56,6 +84,7 @@ interactive_menu() {
     fi
 
     tput civis 2>/dev/null       # hide cursor while navigating
+    _ui_wrap_off                 # one row == one line (see § line-wrap control)
 
     printf '\n'
     printf "  ${ACCENT}${BOLD}%s${NC}\n" "$title"
@@ -90,6 +119,7 @@ interactive_menu() {
         done
     done
 
+    _ui_wrap_on                  # restore automatic line-wrap
     tput cnorm 2>/dev/null       # restore cursor
     MENU_RESULT=$sel
 }
@@ -209,6 +239,7 @@ interactive_multiselect() {
     }
 
     tput civis 2>/dev/null       # hide cursor while navigating
+    _ui_wrap_off                 # one row == one line (see § line-wrap control)
 
     printf '\n'
     printf "  ${ACCENT}${BOLD}%s${NC}\n" "$title"
@@ -255,6 +286,7 @@ interactive_multiselect() {
         done
     done
 
+    _ui_wrap_on                  # restore automatic line-wrap
     tput cnorm 2>/dev/null       # restore cursor
     unset -f _ms_row _ms_sync_all _ms_set_all
 
