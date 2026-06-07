@@ -191,14 +191,14 @@ show_main_menu() {
     local rule; rule=$(printf '═%.0s' {1..54})
     printf '\n'
     printf "  ${ACCENT}${BOLD}╔%s╗${NC}\n" "$rule"
-    printf "  ${ACCENT}${BOLD}║${NC}  ${WHT}${BOLD}%-50s${NC}  ${ACCENT}${BOLD}║${NC}\n" "macOS Cleaner    -    v1.2.0"
+    printf "  ${ACCENT}${BOLD}║${NC}  ${WHT}${BOLD}%-50s${NC}  ${ACCENT}${BOLD}║${NC}\n" "macOS Cleaner    -    v1.3.0"
     printf "  ${ACCENT}${BOLD}╠%s╣${NC}\n" "$rule"
     printf "  ${ACCENT}${BOLD}║${NC}  ${DIM}%-50s${NC}  ${ACCENT}${BOLD}║${NC}\n" "Safe disk-space cleaner + maintenance"
     printf "  ${ACCENT}${BOLD}║${NC}  ${DIM}%-50s${NC}  ${ACCENT}${BOLD}║${NC}\n" "Disk: $(disk_free)"
     printf "  ${ACCENT}${BOLD}╚%s╝${NC}\n" "$rule"
 
     local -a items=(
-        "Cleanup & maintenance   (clean · memory · DNS · ports · apps · Docker · Ollama)"
+        "Cleanup & maintenance"
         "Uninstall an app or package"
         "Exit"
     )

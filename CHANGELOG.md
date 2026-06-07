@@ -5,6 +5,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0] — 2026-06-07
+
+### Added
+- New cleanup section **§ 26 · Adobe Creative Cloud** — clears the shared Media Cache / Peak files
+  and per-app + Creative Cloud desktop caches and logs (Photoshop, Premiere Pro, After Effects,
+  Illustrator, Bridge). Projects, libraries, and presets are left untouched.
+- New cleanup section **§ 27 · Photos (caches only)** — clears only the Photos app's regenerable
+  caches *outside* the library (`com.apple.Photos`, `photolibraryd`, `photoanalysisd`, the Photos
+  container cache). Your `.photoslibrary` (originals, edits, albums) is never touched; an info note
+  points to Apple's supported ways to reclaim its space.
+- New cleanup section **§ 32 · System Data** — a research-backed sweep of regenerable per-app sandbox
+  caches (`~/Library/Containers/*/Data/Library/Caches`, `~/Library/Group Containers/*/Library/Caches`)
+  plus crash/diagnostic reports. iCloud-sync staging caches (`com.apple.bird`, `cloudphotosd`, `cloudd`,
+  …) are deliberately skipped, and large irreplaceable items (iOS device backups) are reported, never
+  deleted. Grounded in a multi-source, fact-checked review of what macOS "System Data" actually is.
+- `sweep_caches` helper — bulk-clears many cache directories into one compact summary, handles paths
+  containing spaces, excludes iCloud-sync caches, and honours the per-directory timeout.
+
+### Fixed
+- **Menu navigation glitch** — moving up/down could repaint the menu repeatedly and "walk" it down the
+  screen when a row's label was wider than the window. The redraw moved the cursor up by the row count,
+  but a wrapped label spanned extra physical lines. Menus now disable the terminal's automatic line-wrap
+  while on screen, so one row always occupies one line and the cursor math is exact.
+
+### Changed
+- Simplified the first main-menu entry to **"Cleanup & maintenance"** (dropped the long parenthetical).
+- The safe "Clean up" run now spans 32 sections, adding Adobe and Photos app caches and the System Data sweep.
+
+---
+
 ## [1.2.0] — 2026-06-05
 
 ### Added
