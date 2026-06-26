@@ -7,10 +7,10 @@
 #
 #   Requires (sourced earlier): colors.sh (RED/GRN/…/NC), core.sh ($LOG_FILE)
 #
-#   say   — top-level announcement      info  — indented detail
-#   step  — sub-step heading            ok    — success line
-#   warn  — non-fatal warning           fail  — failure line
-#   section — bold banner heading       hr    — thin divider rule
+#   say   - top-level announcement      info  - indented detail
+#   step  - sub-step heading            ok    - success line
+#   warn  - non-fatal warning           fail  - failure line
+#   section - bold banner heading       hr    - thin divider rule
 # =============================================================================
 
 _log()    { printf '%b\n' "$*" | tee -a "$LOG_FILE"; }
@@ -36,7 +36,7 @@ hr() {
 # ── bold section banner ──────────────────────────────────────────────────────
 #   Renders as a clearly weighted heading: a heavy top corner with the title in
 #   bright white, underlined by a full-width rule. Far more prominent than body
-#   text — the closest a terminal gets to "larger" text.
+#   text - the closest a terminal gets to "larger" text.
 section() {
     local title="$1"
     local rule; rule=$(printf '━%.0s' $(seq 1 70))

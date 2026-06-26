@@ -6,7 +6,7 @@
 # │  optional maintenance actions (flush DNS · free dev ports · kill apps).       │
 # │  Never touches personal files (Documents, Desktop, Pictures, …).              │
 # │                                                                               │
-# │  Requires : bash 3.2+ (ships with macOS — no extra install needed)            │
+# │  Requires : bash 3.2+ (ships with macOS - no extra install needed)            │
 # │  Sudo     : system-cache, DNS-flush, and Time Machine steps prompt for a pw.  │
 # │                                                                               │
 # │  Usage                                                                        │

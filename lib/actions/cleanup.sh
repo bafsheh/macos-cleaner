@@ -2,7 +2,7 @@
 # =============================================================================
 # § lib/actions/cleanup.sh  ·  Full disk-space cleanup action
 #
-#   run_clean — the comprehensive cleanup flow (32 sections: Trash, caches,
+#   run_clean - the comprehensive cleanup flow (32 sections: Trash, caches,
 #   logs, package-manager stores across every major language/tool ecosystem,
 #   plus Microsoft/Adobe/Photos app caches and a safe "System Data" sweep).
 #   Registered in the action registry as the "Clean up" queue item.
@@ -14,7 +14,7 @@
 # =============================================================================
 # § run_clean
 #
-#   Full cleanup flow — all 32 sections.
+#   Full cleanup flow - all 32 sections.
 #   Called from show_main_menu when the user selects option 1.
 # =============================================================================
 run_clean() {
@@ -35,7 +35,7 @@ info "timeouts  : cmd=${CMD_TIMEOUT}s  dir=${DIR_TIMEOUT}s  scan=${SCAN_TIMEOUT}
 say "Disk before: $(disk_free)"
 
 # =============================================================================
-# § 0 · PRE-RUN DISK USAGE REPORT  (informational — nothing deleted)
+# § 0 · PRE-RUN DISK USAGE REPORT  (informational - nothing deleted)
 # =============================================================================
 section "0 · PRE-RUN DISK USAGE REPORT"
 
@@ -61,7 +61,7 @@ section "2 · USER CACHES & LOGS"
 
 say "User Library caches and logs"
 # Swept per-subfolder (NOT a blanket wipe) so iCloud-sync staging caches
-# (com.apple.bird · CloudKit · CloudDocs — may hold un-uploaded data) are skipped.
+# (com.apple.bird · CloudKit · CloudDocs - may hold un-uploaded data) are skipped.
 sweep_caches "User Library Caches" "$HOME/Library/Caches" "$HOME/Library/Caches/*"
 clean_dir "$HOME/Library/Logs"                                "User Logs"
 clean_dir "$HOME/Library/Application Support/CrashReporter"  "User Crash Reports"
@@ -133,7 +133,7 @@ section "6 · HOMEBREW"
 
 say "Homebrew orphan deps, stale formulae, cache, and logs"
 if command -v brew &>/dev/null; then
-    # autoremove first — removes formulae installed only as deps that are now orphaned
+    # autoremove first - removes formulae installed only as deps that are now orphaned
     run_step "Homebrew autoremove (orphan deps)"  "brew autoremove"
     # cleanup after autoremove so it catches newly orphaned bottles
     run_step "Homebrew cleanup (prune all)"       "brew cleanup --prune=all -s"
@@ -321,7 +321,7 @@ section "13 · C / C++"
 
 say "ccache, Conan, and vcpkg caches"
 
-# ccache — compiler cache
+# ccache - compiler cache
 if command -v ccache &>/dev/null; then
     run_step "ccache --clear"  "ccache --clear"
 fi
@@ -442,7 +442,7 @@ if command -v docker &>/dev/null; then
         run_step "docker system prune -a"   "docker system prune -af"
         run_step "docker buildx prune"      "docker buildx prune -f"
 
-        # --volumes removes unnamed volumes — opt-in only because named volumes may
+        # --volumes removes unnamed volumes - opt-in only because named volumes may
         # hold database data (postgres, mysql, redis) that the user wants to keep.
         step "[Docker volume prune  (opt-in)]"
         info "cmd     : docker volume prune -f"
@@ -458,11 +458,11 @@ if command -v docker &>/dev/null; then
                 echo
             fi
         else
-            info "status  : non-interactive — skipped (run manually: docker volume prune -f)"
+            info "status  : non-interactive - skipped (run manually: docker volume prune -f)"
             echo
         fi
     else
-        step "[Docker]"; info "status  : daemon not running — skipping"; echo
+        step "[Docker]"; info "status  : daemon not running - skipping"; echo
     fi
 else
     skip_missing "Docker"
@@ -489,7 +489,7 @@ clean_dir "$HOME/.vagrant.d/tmp"              "Vagrant tmp"
 
 # =============================================================================
 # § 21 · LOCAL DATABASE DEV  (Postgres.app · DBngin · Redis)
-#   Logs only — data directories are never touched.
+#   Logs only - data directories are never touched.
 # =============================================================================
 section "21 · LOCAL DATABASE DEV"
 
@@ -688,7 +688,7 @@ section "25 · MICROSOFT OFFICE, TEAMS & OUTLOOK"
 
 say "Microsoft app caches (documents, accounts, and mail are preserved)"
 
-# ── Office apps — sandboxed container caches ─────────────────────────────────
+# ── Office apps - sandboxed container caches ─────────────────────────────────
 clean_dir "$HOME/Library/Containers/com.microsoft.Word/Data/Library/Caches"        "Word cache"
 clean_dir "$HOME/Library/Containers/com.microsoft.Excel/Data/Library/Caches"       "Excel cache"
 clean_dir "$HOME/Library/Containers/com.microsoft.Powerpoint/Data/Library/Caches"  "PowerPoint cache"
@@ -719,7 +719,7 @@ clean_dir "$HOME/Library/Caches/com.microsoft.onenote.mac" "OneNote cache (Libra
 clean_dir "$HOME/Library/Caches/com.microsoft.autoupdate2"     "Microsoft AutoUpdate cache"
 clean_dir "$HOME/Library/Caches/com.microsoft.autoupdate.fba"  "Microsoft AutoUpdate (fba) cache"
 
-# ── Microsoft Edge (Chromium) — Default profile caches ───────────────────────
+# ── Microsoft Edge (Chromium) - Default profile caches ───────────────────────
 clean_dir "$HOME/Library/Caches/com.microsoft.edgemac"                                           "Edge cache (Library)"
 clean_dir "$HOME/Library/Application Support/Microsoft Edge/Default/Cache"                        "Edge Default Cache"
 clean_dir "$HOME/Library/Application Support/Microsoft Edge/Default/Code Cache"                   "Edge Default Code Cache"
@@ -739,7 +739,7 @@ section "26 · ADOBE CREATIVE CLOUD"
 
 say "Adobe shared media caches, app caches, and logs (projects & presets preserved)"
 
-# ── shared media cache (Premiere / After Effects / Audition) — often many GB ─
+# ── shared media cache (Premiere / After Effects / Audition) - often many GB ─
 clean_dir "$HOME/Library/Application Support/Adobe/Common/Media Cache Files"  "Adobe Media Cache Files"
 clean_dir "$HOME/Library/Application Support/Adobe/Common/Media Cache"        "Adobe Media Cache"
 clean_dir "$HOME/Library/Application Support/Adobe/Common/Peak Files"         "Adobe Peak Files (audio waveforms)"
@@ -759,7 +759,7 @@ clean_dir "$HOME/Library/Logs/Adobe"                                          "A
 clean_dir "$HOME/Library/Logs/CreativeCloud"                                  "Creative Cloud logs"
 
 # =============================================================================
-# § 27 · PHOTOS  (caches only — your library is never touched)
+# § 27 · PHOTOS  (caches only - your library is never touched)
 #
 #   Cleans ONLY the Photos app's regenerable caches that live OUTSIDE the
 #   library bundle. The ~/Pictures/*.photoslibrary package (originals, edits,
@@ -774,11 +774,11 @@ clean_dir "$HOME/Library/Caches/com.apple.photolibraryd"                   "phot
 clean_dir "$HOME/Library/Caches/com.apple.photoanalysisd"                  "photoanalysisd cache"
 clean_dir "$HOME/Library/Containers/com.apple.Photos/Data/Library/Caches"  "Photos container cache"
 
-# Informational only — the library itself is left untouched (no du scan: it can
+# Informational only - the library itself is left untouched (no du scan: it can
 # be huge). Match ANY *.photoslibrary in ~/Pictures (the default name is
 # localized and users rename/keep several), not just the English default.
 if [[ -n "$(find "$HOME/Pictures" -maxdepth 1 -name '*.photoslibrary' -print -quit 2>/dev/null)" ]]; then
-    info "Photos Library detected — originals & edits are NEVER deleted."
+    info "Photos Library detected - originals & edits are NEVER deleted."
     info "  reclaim space via Photos ▸ Recently Deleted, or System Settings ▸"
     info "  Apple Account ▸ iCloud ▸ Photos ▸ 'Optimise Mac Storage'."
 fi
@@ -857,7 +857,7 @@ clean_old_tmp "user TMPDIR"         "${TMPDIR:-/tmp}"
 # =============================================================================
 # § 32 · SYSTEM DATA  (app cache sweep · diagnostics · informational)
 #
-#   "System Data" in Storage settings is a residual catch-all — everything not
+#   "System Data" in Storage settings is a residual catch-all - everything not
 #   counted as Apps/Photos/Documents/etc. The portion that is genuinely safe to
 #   reclaim is regenerable app caches and crash reports, handled here. The other
 #   big contributors are deliberately left alone:
@@ -867,7 +867,7 @@ clean_old_tmp "user TMPDIR"         "${TMPDIR:-/tmp}"
 #     • iOS device backups           → irreplaceable user data → REPORTED only
 #     • the Photos .photoslibrary    → see §27 (never touched)
 #
-#   NB: we intentionally do NOT blanket-wipe ~/Library/Caches — CloudKit
+#   NB: we intentionally do NOT blanket-wipe ~/Library/Caches - CloudKit
 #   (com.apple.bird) can stage un-uploaded user data there. We sweep only the
 #   per-app sandbox cache subfolders, which regenerate cleanly.
 # =============================================================================
@@ -885,7 +885,7 @@ if sudo -n true 2>/dev/null; then
     clean_dir "/Library/Logs/DiagnosticReports"   "System crash & diagnostic reports" "sudo"
 else
     step "[System crash & diagnostic reports]"
-    info "status  : needs sudo (only granted if you authorised §30) — skipped"
+    info "status  : needs sudo (only granted if you authorised §30) - skipped"
     echo
 fi
 
@@ -897,7 +897,7 @@ if [[ -d $_ios_backup ]]; then
     info "  → manage in Finder ▸ select device ▸ Manage Backups to remove old device backups."
 fi
 info "Tip: in Disk Utility choose View ▸ Show APFS Snapshots to see snapshot and"
-info "     purgeable space — the most accurate view of reclaimable System Data."
+info "     purgeable space - the most accurate view of reclaimable System Data."
 
 # =============================================================================
 # § SUMMARY
@@ -925,6 +925,6 @@ info "Full log                 : $LOG_FILE"
 ok   "Cleanup complete."
 echo
 printf 'Tip: restart your Mac to release caches still held by running processes.\n'
-printf 'Note: apps rebuild their caches on next launch — first start may be slightly slower.\n'
+printf 'Note: apps rebuild their caches on next launch - first start may be slightly slower.\n'
 
 }   # end run_clean

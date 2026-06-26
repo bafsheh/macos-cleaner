@@ -25,7 +25,7 @@ _COLOR=1
 [[ -t 1 ]]                      || _COLOR=0   # stdout is piped / redirected
 [[ ${CLICOLOR_FORCE:-0} == 1 ]] && _COLOR=1   # explicit override wins
 
-# ── 24-bit (truecolor) capability — drives the progress-bar render path ──────
+# ── 24-bit (truecolor) capability - drives the progress-bar render path ──────
 #   Only trustworthy signal that is widely set is $COLORTERM. When colour is on
 #   but truecolor is not advertised, callers fall back to 256-colour output.
 _TRUECOLOR=0
@@ -38,7 +38,7 @@ fi
 # ── _sgr CODE → the "\033[CODEm" escape, or "" when colour is disabled ───────
 #   Returns an *interpreted* escape (real ESC byte) so it works whether the
 #   caller feeds it to `printf '%b'` (logging) or splices it into a printf
-#   format string (ui widgets) — both render an ESC identically.
+#   format string (ui widgets) - both render an ESC identically.
 _sgr() { (( _COLOR )) && printf '\033[%sm' "$1"; }
 
 # ── core palette ─────────────────────────────────────────────────────────────
@@ -49,7 +49,7 @@ BLU=$(_sgr '0;34')        # headings / info banners
 CYN=$(_sgr '0;36')        # selection / highlight
 MAG=$(_sgr '0;35')        # secondary accent
 DIM=$(_sgr '2')           # subtle / de-emphasised
-NC=$(_sgr '0')            # reset — No Color
+NC=$(_sgr '0')            # reset - No Color
 
 # ── bright variants (clearer status glyphs on dark themes) ───────────────────
 BRED=$(_sgr '1;91')
@@ -61,17 +61,17 @@ BMAG=$(_sgr '1;95')
 
 # ── style modifiers ──────────────────────────────────────────────────────────
 BOLD=$(_sgr '1')          # bold weight
-ITAL=$(_sgr '3')          # italic   (ignored by some terminals — harmless)
+ITAL=$(_sgr '3')          # italic   (ignored by some terminals - harmless)
 UND=$(_sgr '4')           # underline
 REV=$(_sgr '7')           # reverse video
 
 # ── extra accents ────────────────────────────────────────────────────────────
 WHT=$(_sgr '1;37')        # bright white
 GRY=$(_sgr '0;90')        # bright black / grey
-ORG=$(_sgr '38;5;208')    # orange (256-color)  — progress fill accent
-TEAL=$(_sgr '38;5;44')    # teal   (256-color)  — banner accent
-ACCENT=$(_sgr '38;5;39')  # azure  (256-color)  — brand / section accent
-HL=$(_sgr '48;5;236')     # dark-grey background — selected-row highlight
+ORG=$(_sgr '38;5;208')    # orange (256-color)  - progress fill accent
+TEAL=$(_sgr '38;5;44')    # teal   (256-color)  - banner accent
+ACCENT=$(_sgr '38;5;39')  # azure  (256-color)  - brand / section accent
+HL=$(_sgr '48;5;236')     # dark-grey background - selected-row highlight
 
 # ── freeze the palette ───────────────────────────────────────────────────────
 readonly _COLOR _TRUECOLOR RED GRN YLW BLU CYN MAG DIM NC \

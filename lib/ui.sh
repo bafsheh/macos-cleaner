@@ -2,7 +2,7 @@
 # =============================================================================
 # § lib/ui.sh  ·  Interactive TUI widgets
 #
-#   Single responsibility: render and drive terminal UI. No business logic —
+#   Single responsibility: render and drive terminal UI. No business logic -
 #   widgets return their result via globals the caller reads.
 #
 #     interactive_menu          single-choice arrow menu  → MENU_RESULT
@@ -25,7 +25,7 @@
 #   (tput cuu N) and repainting. That math is only correct when every row
 #   occupies a single physical line. A label wider than the window would wrap
 #   onto a second line, the cursor-up would land too low, and each keypress
-#   would repaint a fresh copy below the old one — the menu appears to repeat.
+#   would repaint a fresh copy below the old one - the menu appears to repeat.
 #
 #   We turn the terminal's automatic line-wrap OFF (DECAWM, ESC[?7l) while a
 #   menu is on screen so an over-long label is truncated at the right edge

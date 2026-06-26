@@ -15,7 +15,7 @@
 # =============================================================================
 
 # Curated list of common development-server ports. Add to this list rather
-# than broadening the scope to "all ports" — that would be unsafe.
+# than broadening the scope to "all ports" - that would be unsafe.
 declare -ra DEV_PORTS=(
     3000 3001 3002 3003        # Node / Next.js / CRA / Rails
     4000 4200 4321             # Phoenix / Angular / Astro
@@ -33,7 +33,7 @@ free_ports() {
     section "FREE COMMON DEV PORTS"
 
     if ! command -v lsof &>/dev/null; then
-        warn "lsof not found — cannot inspect listening ports"
+        warn "lsof not found - cannot inspect listening ports"
         echo; return 0
     fi
 
@@ -65,7 +65,7 @@ free_ports() {
     done
 
     if (( freed == 0 )); then
-        info "no dev ports were in use — nothing to free"
+        info "no dev ports were in use - nothing to free"
     else
         say "Freed ${freed} of ${checked} checked port(s)"
     fi

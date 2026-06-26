@@ -3,7 +3,7 @@
 # § lib/core.sh  ·  Runtime configuration + global state
 #
 #   Single responsibility: establish the execution environment shared by every
-#   module — shell flags, the macOS guard, the run log file, statistic counters,
+#   module - shell flags, the macOS guard, the run log file, statistic counters,
 #   and the tunable timeouts. No business logic lives here.
 #
 #   Requires (sourced earlier): nothing (this is sourced right after colors.sh)
@@ -17,7 +17,7 @@ set -uo pipefail
 
 # ── macOS guard ──────────────────────────────────────────────────────────────
 #   The script targets bash 3.2+ (the version shipped with macOS) and macOS
-#   only — bail out early on any other platform.
+#   only - bail out early on any other platform.
 if [[ $(uname) != Darwin ]]; then
     printf 'ERROR: This script is macOS-only.\n' >&2
     exit 1
@@ -38,7 +38,7 @@ declare -i TOTAL_FAILED=0
 declare -i TOTAL_TIMEDOUT=0
 declare -r START_TIME=$(date +%s)
 
-# ── tunable timeouts (seconds — override via environment) ────────────────────
+# ── tunable timeouts (seconds - override via environment) ────────────────────
 declare -i CMD_TIMEOUT=${CMD_TIMEOUT:-60}
 declare -i DIR_TIMEOUT=${DIR_TIMEOUT:-120}
 declare -i SCAN_TIMEOUT=${SCAN_TIMEOUT:-60}

@@ -7,7 +7,7 @@
 #
 #   Open/closed principle: to add a new maintenance action, append one entry to
 #   each of the three parallel registry arrays below and drop a function file in
-#   lib/actions/ — nothing else in this file (or the queue runner) changes. The
+#   lib/actions/ - nothing else in this file (or the queue runner) changes. The
 #   "Shut down when done" toggle and the "Back" row are always appended after
 #   the action rows, so new actions slot in above them automatically.
 #
@@ -16,7 +16,7 @@
 #   Public entry: show_main_menu
 # =============================================================================
 
-# ── action registry (parallel arrays — bash 3.2 has no ordered assoc arrays) ──
+# ── action registry (parallel arrays - bash 3.2 has no ordered assoc arrays) ──
 #   ACTION_LABELS[i] is shown in the checkbox list AND in the queue banner.
 #   ACTION_FNS[i]    is the function invoked when that row is selected.
 #   Execution order is the array order (= the list order the user sees).
@@ -27,8 +27,8 @@ declare -ra ACTION_LABELS=(
     "Flush DNS cache"
     "Free common dev ports"
     "Kill all open apps   (spares terminals · IDEs · Finder)"
-    "Docker — remove ALL containers & images      ⚠ destructive"
-    "Ollama / llama — remove ALL models & caches  ⚠ destructive"
+    "Docker - remove ALL containers & images      ⚠ destructive"
+    "Ollama / llama - remove ALL models & caches  ⚠ destructive"
 )
 declare -ra ACTION_FNS=(run_clean free_memory flush_dns free_ports kill_apps docker_clean ollama_clean)
 
@@ -64,8 +64,8 @@ _run_action_queue() {
 #   Presents the multi-select checkbox list of maintenance actions, then runs
 #   the selected ones as an ordered queue. Two trailing control rows sit below
 #   the actions and are NOT affected by "Select all":
-#       • "Shut down Mac when all actions finish"  — second-to-last toggle
-#       • "Back — return to main menu"             — always the last row
+#       • "Shut down Mac when all actions finish"  - second-to-last toggle
+#       • "Back - return to main menu"             - always the last row
 #   Returns to the caller when done (or immediately if Back is chosen).
 # =============================================================================
 run_cleanup_menu() {
@@ -77,25 +77,25 @@ run_cleanup_menu() {
     #   shutdown → ${#ACTION_LABELS[@]}   (one past the last action index)
     local -i shutdown_idx=${#ACTION_LABELS[@]}
     items+=("Shut down Mac when all actions finish")
-    items+=("Back — return to main menu")
+    items+=("Back - return to main menu")
 
     # Tell the widget the last 2 rows are controls (excluded from Select-all)
     # and which row acts as Back (activating it returns to the main menu).
     MS_TAIL_CONTROLS=2
     MS_BACK_ROW=$(( ${#items[@]} - 1 ))
 
-    interactive_multiselect "Cleanup & maintenance — choose actions to run" "${items[@]}"
+    interactive_multiselect "Cleanup & maintenance - choose actions to run" "${items[@]}"
 
     # Back row activated → straight back to the main menu, no noise.
     if (( MULTISELECT_BACK == 1 )); then
         return
     fi
     if (( MULTISELECT_CANCELLED == 1 )); then
-        printf '\n'; say "Cancelled — back to menu."; printf '\n'
+        printf '\n'; say "Cancelled - back to menu."; printf '\n'
         return
     fi
     if [[ -z $MULTISELECT_RESULT ]]; then
-        printf '\n'; say "No actions selected — nothing run."; printf '\n'
+        printf '\n'; say "No actions selected - nothing run."; printf '\n'
         return
     fi
 
@@ -120,7 +120,7 @@ run_cleanup_menu() {
     done
 
     if (( ${#chosen[@]} == 0 )); then
-        printf '\n'; say "No actions selected — nothing run."; printf '\n'
+        printf '\n'; say "No actions selected - nothing run."; printf '\n'
         return
     fi
 
@@ -153,7 +153,7 @@ _shutdown_system() {
             printf "\r  ${BOLD}${BRED}Shutting down in %2ds…${NC}  " "$secs"
             if IFS= read -rsn1 -t 1 key; then
                 printf '\r'; tput el 2>/dev/null
-                say "Shutdown cancelled — staying on."; printf '\n'
+                say "Shutdown cancelled - staying on."; printf '\n'
                 return 0
             fi
             (( secs-- ))
@@ -164,10 +164,10 @@ _shutdown_system() {
         # abort affordance would violate the safety model the other destructive
         # actions follow, so require an explicit opt-in (mirrors *_ASSUME_YES).
         if [[ ${SHUTDOWN_ASSUME_YES:-0} != 1 ]]; then
-            warn "non-interactive — shutdown skipped (set SHUTDOWN_ASSUME_YES=1 to allow)"
+            warn "non-interactive - shutdown skipped (set SHUTDOWN_ASSUME_YES=1 to allow)"
             printf '\n'; return 0
         fi
-        info "non-interactive — SHUTDOWN_ASSUME_YES=1, powering off in ${secs}s"
+        info "non-interactive - SHUTDOWN_ASSUME_YES=1, powering off in ${secs}s"
         sleep "$secs"
     fi
 

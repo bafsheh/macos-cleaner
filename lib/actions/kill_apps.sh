@@ -3,9 +3,9 @@
 # § lib/actions/kill_apps.sh  ·  Force-quit open GUI applications
 #
 #   Quits every visible (foreground) GUI app, EXCEPT a protected set:
-#     • terminal emulators  — so the running session is never killed
-#     • code editors / IDEs — so the editor the script may be launched from survives
-#     • Finder              — core system UI
+#     • terminal emulators  - so the running session is never killed
+#     • code editors / IDEs - so the editor the script may be launched from survives
+#     • Finder              - core system UI
 #   Background/menu-bar agents are excluded automatically: we only enumerate
 #   processes where "background only is false".
 #
@@ -51,7 +51,7 @@ kill_apps() {
     section "KILL OPEN APPS"
 
     if ! command -v osascript &>/dev/null; then
-        warn "osascript not found — cannot enumerate apps"
+        warn "osascript not found - cannot enumerate apps"
         echo; return 0
     fi
 
@@ -80,7 +80,7 @@ OSA
     done <<< "$raw"
 
     if (( ${#targets[@]} == 0 )); then
-        info "no killable foreground apps found — nothing to do"
+        info "no killable foreground apps found - nothing to do"
         echo; return 0
     fi
 
@@ -97,13 +97,13 @@ OSA
         printf "  ${YLW}Quit these ${#targets[@]} app(s)? [y/N]: ${NC}"
         local answer; read -r answer
         if [[ $answer != [yY] ]]; then
-            info "Cancelled — no apps were quit."
+            info "Cancelled - no apps were quit."
             echo; return 0
         fi
     elif [[ ${KILL_APPS_ASSUME_YES:-0} == 1 ]]; then
-        info "non-interactive — KILL_APPS_ASSUME_YES=1, proceeding"
+        info "non-interactive - KILL_APPS_ASSUME_YES=1, proceeding"
     else
-        warn "non-interactive and no confirmation possible — skipping (set KILL_APPS_ASSUME_YES=1 to override)"
+        warn "non-interactive and no confirmation possible - skipping (set KILL_APPS_ASSUME_YES=1 to override)"
         echo; return 0
     fi
     echo
@@ -122,6 +122,6 @@ OSA
     done
 
     echo
-    say "Done — graceful: ${quit}   forced: ${forced}   failed: ${failed}"
+    say "Done - graceful: ${quit}   forced: ${forced}   failed: ${failed}"
     echo
 }
