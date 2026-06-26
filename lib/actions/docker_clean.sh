@@ -2,11 +2,11 @@
 # =============================================================================
 # § lib/actions/docker_clean.sh  ·  Full Docker teardown
 #
-#   DESTRUCTIVE — removes EVERYTHING Docker is holding locally:
+#   DESTRUCTIVE - removes EVERYTHING Docker is holding locally:
 #     • stops then removes ALL containers (running and stopped)
 #     • removes ALL images (not just dangling)
 #     • prunes networks and the entire build cache
-#     • OPTIONALLY removes ALL volumes (opt-in — volumes hold database data)
+#     • OPTIONALLY removes ALL volumes (opt-in - volumes hold database data)
 #
 #   This is intentionally a separate, opt-in menu action (not part of the safe
 #   "Clean up" run) and always requires confirmation. Automation can opt in
@@ -20,14 +20,14 @@
 #   Public entry: docker_clean
 # =============================================================================
 docker_clean() {
-    section "DOCKER — FULL CLEANUP (containers + images)"
+    section "DOCKER - FULL CLEANUP (containers + images)"
 
     if ! command -v docker &>/dev/null; then
         skip_missing "Docker"
         return 0
     fi
     if ! docker info &>/dev/null 2>&1; then
-        step "[Docker]"; info "status  : daemon not running — start Docker Desktop and retry"; echo
+        step "[Docker]"; info "status  : daemon not running - start Docker Desktop and retry"; echo
         return 0
     fi
 
@@ -51,33 +51,33 @@ docker_clean() {
     echo
 
     if (( n_all == 0 && n_img == 0 && n_vol == 0 )); then
-        ok "Docker is already empty — nothing to remove."
+        ok "Docker is already empty - nothing to remove."
         echo; return 0
     fi
 
     # ── confirm (destructive) ─────────────────────────────────────────────────
-    warn "This removes ALL containers and ALL images — they must be re-pulled/rebuilt."
+    warn "This removes ALL containers and ALL images - they must be re-pulled/rebuilt."
     local do_volumes=0
     if [[ -t 0 ]]; then
         printf "  ${YLW}Remove all containers & images now? [y/N]: ${NC}"
         local answer; read -r answer
         if [[ $answer != [yY] ]]; then
-            info "Cancelled — nothing removed."; echo; return 0
+            info "Cancelled - nothing removed."; echo; return 0
         fi
         printf "  ${YLW}Also remove ALL volumes (DELETES database data)? [y/N]: ${NC}"
         local vans; read -r vans
         [[ $vans == [yY] ]] && do_volumes=1
     elif [[ ${DOCKER_CLEAN_ASSUME_YES:-0} == 1 ]]; then
-        info "non-interactive — DOCKER_CLEAN_ASSUME_YES=1, proceeding"
+        info "non-interactive - DOCKER_CLEAN_ASSUME_YES=1, proceeding"
         [[ ${DOCKER_CLEAN_VOLUMES:-0} == 1 ]] && do_volumes=1
     else
-        warn "non-interactive and no confirmation possible — skipping (set DOCKER_CLEAN_ASSUME_YES=1)"
+        warn "non-interactive and no confirmation possible - skipping (set DOCKER_CLEAN_ASSUME_YES=1)"
         echo; return 0
     fi
     echo
 
     # ── run the teardown with a Docker-appropriate timeout ────────────────────
-    #   Validate DOCKER_TIMEOUT before assigning into the integer CMD_TIMEOUT —
+    #   Validate DOCKER_TIMEOUT before assigning into the integer CMD_TIMEOUT -
     #   a non-numeric value would abort the run under `set -u`.
     local -i _saved_to=$CMD_TIMEOUT
     local dto=${DOCKER_TIMEOUT:-300}

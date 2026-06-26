@@ -16,7 +16,7 @@
 #   displays findings with type, path, and size, then removes confirmed items.
 #
 #   Search locations
-#     /Applications · ~/Applications — .app bundles
+#     /Applications · ~/Applications - .app bundles
 #     Homebrew formula + cask
 #     CLI binary dirs (/opt/homebrew/bin, /usr/local/bin, …)
 #     npm global packages
@@ -45,7 +45,7 @@ run_uninstaller() {
     search_name="${search_name%"${search_name##*[! ]}"}"
 
     if [[ -z $search_name ]]; then
-        warn "No name entered — returning to menu."
+        warn "No name entered - returning to menu."
         echo; return
     fi
 
@@ -294,7 +294,7 @@ run_uninstaller() {
     fi
 
     if (( ${#to_remove[@]} == 0 )); then
-        info "Nothing removed — returning to menu."
+        info "Nothing removed - returning to menu."
         echo; return
     fi
 
@@ -318,7 +318,7 @@ run_uninstaller() {
         echo
     done
 
-    say "Done — removed: ${removed}   failed: ${failed}"
+    say "Done - removed: ${removed}   failed: ${failed}"
     echo
 
     # unset local helper so it doesn't leak into global scope

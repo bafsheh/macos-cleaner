@@ -2,7 +2,7 @@
 # =============================================================================
 # § lib/actions/ollama_clean.sh  ·  Full Ollama / llama cleanup
 #
-#   DESTRUCTIVE — removes downloaded model weights, not just caches:
+#   DESTRUCTIVE - removes downloaded model weights, not just caches:
 #     • every Ollama model (via `ollama rm`, then the on-disk model store)
 #     • Ollama cache / logs / history
 #     • Meta llama (llama-stack) checkpoints under ~/.llama, if present
@@ -11,7 +11,7 @@
 #   separate, opt-in action and always requires confirmation. Automation can
 #   opt in with OLLAMA_CLEAN_ASSUME_YES=1.
 #
-#   Note: llama.cpp / llamafile keep no standard global model directory — their
+#   Note: llama.cpp / llamafile keep no standard global model directory - their
 #   .gguf files live wherever you put them, so they can't be safely auto-wiped.
 #
 #   Requires (sourced earlier): colors.sh, logging.sh, helpers.sh
@@ -19,7 +19,7 @@
 #   Public entry: ollama_clean
 # =============================================================================
 ollama_clean() {
-    section "OLLAMA / LLAMA — FULL CLEANUP (models + caches)"
+    section "OLLAMA / LLAMA - FULL CLEANUP (models + caches)"
 
     local ollama_dir="$HOME/.ollama"
     local models_dir="$ollama_dir/models"
@@ -54,17 +54,17 @@ ollama_clean() {
     echo
 
     # ── confirm (destructive) ─────────────────────────────────────────────────
-    warn "This DELETES all downloaded model weights — they must be re-pulled."
+    warn "This DELETES all downloaded model weights - they must be re-pulled."
     if [[ -t 0 ]]; then
         printf "  ${YLW}Remove ALL Ollama/llama models & caches now? [y/N]: ${NC}"
         local answer; read -r answer
         if [[ $answer != [yY] ]]; then
-            info "Cancelled — nothing removed."; echo; return 0
+            info "Cancelled - nothing removed."; echo; return 0
         fi
     elif [[ ${OLLAMA_CLEAN_ASSUME_YES:-0} == 1 ]]; then
-        info "non-interactive — OLLAMA_CLEAN_ASSUME_YES=1, proceeding"
+        info "non-interactive - OLLAMA_CLEAN_ASSUME_YES=1, proceeding"
     else
-        warn "non-interactive and no confirmation possible — skipping (set OLLAMA_CLEAN_ASSUME_YES=1)"
+        warn "non-interactive and no confirmation possible - skipping (set OLLAMA_CLEAN_ASSUME_YES=1)"
         echo; return 0
     fi
     echo
@@ -89,7 +89,7 @@ ollama_clean() {
             (( TOTAL_CLEANED += removed ))
             echo
         else
-            info "ollama list returned no models (daemon stopped?) — wiping store directly"
+            info "ollama list returned no models (daemon stopped?) - wiping store directly"
             echo
         fi
     fi

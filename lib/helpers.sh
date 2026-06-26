@@ -3,13 +3,13 @@
 # § lib/helpers.sh  ·  Filesystem + execution helpers
 #
 #   Reusable, side-effect-aware building blocks shared by every action:
-#     • disk_free / human_size / dir_size_kb — measurement
-#     • run_timeout                          — portable timeout wrapper
-#     • run_step                             — logged command execution
-#     • clean_dir / clean_old_tmp           — safe content deletion
-#     • clean_tm_snapshots                   — Time Machine local snapshots
-#     • report_largest_dirs                  — informational disk report
-#     • _scan_and_delete                     — dev-folder artefact sweeper
+#     • disk_free / human_size / dir_size_kb - measurement
+#     • run_timeout                          - portable timeout wrapper
+#     • run_step                             - logged command execution
+#     • clean_dir / clean_old_tmp           - safe content deletion
+#     • clean_tm_snapshots                   - Time Machine local snapshots
+#     • report_largest_dirs                  - informational disk report
+#     • _scan_and_delete                     - dev-folder artefact sweeper
 #
 #   Requires (sourced earlier): colors.sh, core.sh (counters/timeouts), logging.sh
 # =============================================================================
@@ -37,7 +37,7 @@ dir_size_kb() {
 # § TIMEOUT WRAPPER
 #
 #   Preference order:
-#     1. gtimeout  (brew install coreutils)   — most reliable on macOS
+#     1. gtimeout  (brew install coreutils)   - most reliable on macOS
 #     2. timeout   (available on macOS 12+)
 #     3. pure-bash watchdog fallback
 #
@@ -148,7 +148,7 @@ clean_dir() {
     info "timeout : ${timeout_sec}s"
 
     if [[ ! -d $target ]]; then
-        info "status  : not present — nothing to do"
+        info "status  : not present - nothing to do"
         (( TOTAL_SKIPPED_MISSING++ ))
         echo
         return 0
@@ -181,7 +181,7 @@ clean_dir() {
 
     if (( rc == 124 )); then
         (( TOTAL_TIMEDOUT++ )); (( TOTAL_SKIPPED_PROTECTED++ ))
-        warn "TIMED OUT after ${timeout_sec}s — partial cleanup ← $label"
+        warn "TIMED OUT after ${timeout_sec}s - partial cleanup ← $label"
     elif (( rc == 0 )); then
         local -i size_after_kb freed_kb
         size_after_kb=$(dir_size_kb "$target")
@@ -192,7 +192,7 @@ clean_dir() {
         ok "freed $(human_size $freed_kb) in ${elapsed}s ← $label"
     else
         (( TOTAL_SKIPPED_PROTECTED++ ))
-        warn "partial (exit=${rc}, ${elapsed}s) — some items in use ← $label"
+        warn "partial (exit=${rc}, ${elapsed}s) - some items in use ← $label"
     fi
     echo
 }
@@ -200,12 +200,12 @@ clean_dir() {
 # =============================================================================
 # § skip_missing LABEL
 #
-#   Prints a uniform "not installed — skipping" notice.
+#   Prints a uniform "not installed - skipping" notice.
 #   Use wherever a tool is absent and no action can be taken.
 # =============================================================================
 skip_missing() {
     step "[$1]"
-    info "status  : not installed — skipping"
+    info "status  : not installed - skipping"
     echo
 }
 
@@ -214,7 +214,7 @@ skip_missing() {
 #
 #   Bulk-clears the *contents* of every cache directory under BASE whose full
 #   path matches PATH_PATTERN (a find(1) -path glob, e.g. "*/Data/Library/Caches"
-#   for app sandbox containers). Each match is treated as regenerable cache — the
+#   for app sandbox containers). Each match is treated as regenerable cache - the
 #   directory itself is preserved, only its contents are removed.
 #
 #   Unlike clean_dir (one verbose block per path), this aggregates many matches
@@ -222,13 +222,13 @@ skip_missing() {
 #   containers that make up macOS "System Data". Per-directory deletes honour
 #   DIR_TIMEOUT; the global counters are updated once for the whole sweep.
 #
-#   Uses find + `while read` (not shell globbing) so paths containing spaces —
-#   e.g. "~/Library/Group Containers" — are handled correctly.
+#   Uses find + `while read` (not shell globbing) so paths containing spaces -
+#   e.g. "~/Library/Group Containers" - are handled correctly.
 #
 #   SAFETY: iCloud sync daemons stage *un-uploaded* user data under their own
 #   container Caches (research-verified for com.apple.bird / CloudKit). Any
 #   container whose path matches SWEEP_SKIP_RE is skipped and reported, never
-#   wiped — losing those would lose data that has not yet reached iCloud.
+#   wiped - losing those would lose data that has not yet reached iCloud.
 # =============================================================================
 # Matches any iCloud-sync staging container/cache that may hold un-uploaded user
 # data: com.apple.bird (legacy iCloud Drive), cloudd/CloudKit, the Photos sync
@@ -244,7 +244,7 @@ sweep_caches() {
     info "scan    : $base  (match: $pattern)"
 
     if [[ ! -d $base ]]; then
-        info "status  : not present — nothing to do"
+        info "status  : not present - nothing to do"
         (( TOTAL_SKIPPED_MISSING++ ))
         echo; return 0
     fi
@@ -307,7 +307,7 @@ clean_old_tmp() {
     info "path    : $path"
 
     if [[ ! -d $path ]]; then
-        info "status  : not present — nothing to do"
+        info "status  : not present - nothing to do"
         echo; return 0
     fi
 
@@ -338,14 +338,14 @@ clean_old_tmp() {
 #
 #   Lists and deletes all Time Machine local snapshots on the boot volume.
 #   Local snapshots are temporary backups stored on-disk; deleting them is
-#   safe — they have no effect on your remote Time Machine backup.
+#   safe - they have no effect on your remote Time Machine backup.
 #   Requires sudo for deletion.
 # =============================================================================
 clean_tm_snapshots() {
     step "[Time Machine local snapshots]"
 
     if ! command -v tmutil &>/dev/null; then
-        info "status  : tmutil not found — skipping"
+        info "status  : tmutil not found - skipping"
         echo; return 0
     fi
 
@@ -359,7 +359,7 @@ clean_tm_snapshots() {
     info "found   : ${#dates[@]} local snapshot(s)"
 
     if (( ${#dates[@]} == 0 )); then
-        info "status  : no local snapshots — nothing to do"
+        info "status  : no local snapshots - nothing to do"
         echo; return 0
     fi
 
@@ -382,7 +382,7 @@ clean_tm_snapshots() {
         (( TOTAL_CLEANED++ ))
         ok "deleted ${deleted} local snapshot(s)"
     else
-        warn "deleted ${deleted}/${#dates[@]} (${failed} failed — may need sudo or newer macOS)"
+        warn "deleted ${deleted}/${#dates[@]} (${failed} failed - may need sudo or newer macOS)"
     fi
     echo
 }
@@ -391,7 +391,7 @@ clean_tm_snapshots() {
 # § report_largest_dirs PATH LABEL [DEPTH] [COUNT]
 #
 #   Prints a ranked list of the largest subdirectories under PATH.
-#   Purely informational — nothing is deleted.
+#   Purely informational - nothing is deleted.
 #   DEPTH defaults to 1; COUNT defaults to 20.
 # =============================================================================
 report_largest_dirs() {
@@ -400,7 +400,7 @@ report_largest_dirs() {
     local -i depth=${3:-1}
     local -i count=${4:-20}
 
-    step "[$label — top ${count} by size]"
+    step "[$label - top ${count} by size]"
     info "path    : $path  (depth ${depth})"
 
     if [[ ! -d $path ]]; then
@@ -463,7 +463,7 @@ _scan_and_delete() {
 
     info "roots   :"
     local r; for r in "${roots[@]}"; do info "  - $r"; done
-    info "(heartbeat active — Ctrl+C to skip this scan)"
+    info "(heartbeat active - Ctrl+C to skip this scan)"
 
     local hit_list; hit_list=$(mktemp)
 
@@ -484,7 +484,7 @@ _scan_and_delete() {
         if (( waited >= SCAN_TIMEOUT )); then
             kill "$fpid" 2>/dev/null; wait "$fpid" 2>/dev/null
             printf '\n'
-            warn "scan timed out (${SCAN_TIMEOUT}s) — set ${envvar}= for a narrower scope"
+            warn "scan timed out (${SCAN_TIMEOUT}s) - set ${envvar}= for a narrower scope"
             scan_ok=0; break
         fi
     done

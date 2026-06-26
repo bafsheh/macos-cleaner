@@ -4,7 +4,7 @@
 #
 #   macOS aggressively caches files in otherwise-idle RAM; `purge` forces the
 #   kernel to flush that disk cache and return inactive pages to the free pool.
-#   This is the supported, non-destructive way to "free memory" on macOS — it
+#   This is the supported, non-destructive way to "free memory" on macOS - it
 #   never kills user processes, it just drops reclaimable caches.
 #
 #   The action reports a memory snapshot before and after so the effect is
@@ -43,12 +43,12 @@ free_memory() {
     section "FREE UP MEMORY (RAM)"
 
     if ! command -v purge &>/dev/null; then
-        warn "purge not found — cannot free memory on this system"
+        warn "purge not found - cannot free memory on this system"
         echo; return 0
     fi
 
     say "Releasing inactive & cached memory back to the kernel"
-    info "note    : purge only drops reclaimable caches — it never quits your apps"
+    info "note    : purge only drops reclaimable caches - it never quits your apps"
 
     # Bonus: overall free percentage if memory_pressure is available.
     if command -v memory_pressure &>/dev/null; then
@@ -78,7 +78,7 @@ free_memory() {
         echo
         _mem_report "after "
     else
-        warn "no sudo access — skipping (purge requires root)"
+        warn "no sudo access - skipping (purge requires root)"
     fi
 
     echo
