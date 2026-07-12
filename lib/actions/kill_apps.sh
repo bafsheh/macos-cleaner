@@ -2,10 +2,13 @@
 # =============================================================================
 # § lib/actions/kill_apps.sh  ·  Force-quit open GUI applications
 #
-#   Quits every visible (foreground) GUI app, EXCEPT a protected set:
-#     • terminal emulators  - so the running session is never killed
-#     • code editors / IDEs - so the editor the script may be launched from survives
-#     • Finder              - core system UI
+#   Quits every visible (foreground) GUI app, EXCEPT:
+#     • terminal emulators        - so the running session is never killed
+#     • the script's own ancestry - whatever launched us (e.g. VS Code's
+#                                   integrated terminal) is spared dynamically,
+#                                   so the script never kills itself, without
+#                                   hardcoding editors into the spare list.
+#   Everything else (editors, IDEs, Finder, browsers, …) IS closed.
 #   Background/menu-bar agents are excluded automatically: we only enumerate
 #   processes where "background only is false".
 #
@@ -21,24 +24,17 @@
 #   Public entry: kill_apps
 # =============================================================================
 
-# Exact lowercase app names that are always spared.
+# Exact lowercase app names that are always spared: terminal emulators only,
+# so the session running this script is never killed. Editors/IDEs (VS Code,
+# Cursor, JetBrains, Xcode, …) are intentionally NOT here - they get closed.
 declare -ra SPARE_EXACT=(
-    # terminal emulators
     "terminal" "iterm" "iterm2" "warp" "ghostty" "alacritty" "kitty"
     "hyper" "wezterm" "tabby" "rio"
-    # editors / IDEs
-    "code" "code - insiders" "cursor" "windsurf" "zed" "sublime text"
-    "nova" "electron"
-    # system UI
-    "finder"
 )
 
-# Lowercase substrings that mark an editor/IDE worth sparing (covers the many
-# JetBrains products and editor variants whose process names differ).
+# Lowercase substrings that mark a terminal emulator whose reported name varies.
 declare -ra SPARE_SUBSTR=(
-    "jetbrains" "intellij" "pycharm" "webstorm" "goland" "rubymine" "clion"
-    "phpstorm" "datagrip" "rider" "appcode" "android studio" "visual studio"
-    "xcode" "cursor" "windsurf"
+    "iterm" "terminal"
 )
 
 # ── _kapps_is_spared NAME → 0 (spare) / 1 (killable) ─────────────────────────
@@ -48,6 +44,21 @@ _kapps_is_spared() {
     for s in "${SPARE_EXACT[@]}";  do [[ $lc == "$s" ]]   && return 0; done
     for s in "${SPARE_SUBSTR[@]}"; do [[ $lc == *"$s"* ]] && return 0; done
     return 1
+}
+
+# ── _kapps_ancestor_pids → prints the PID chain from this process up to pid 1 ──
+#   Whatever launched us (login shell, terminal, or an editor's integrated
+#   terminal) appears in this chain. Sparing these PIDs means the script never
+#   force-kills its own host, so we can safely close editors like VS Code when
+#   the script is run from a real terminal, yet leave the host intact when it
+#   is run from the editor's own terminal.
+_kapps_ancestor_pids() {
+    local pid=$$
+    while (( pid > 1 )); do
+        printf '%s\n' "$pid"
+        pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+        [[ -z $pid ]] && break
+    done
 }
 
 # ── _kapps_wait_dead PID TIMEOUT → 0 (process gone) / 1 (still alive) ─────────
@@ -75,7 +86,7 @@ kill_apps() {
     fi
 
     say "Scanning for open GUI applications"
-    info "spared  : terminals · editors/IDEs · Finder"
+    info "spared  : terminals + the app hosting this session"
 
     # ── enumerate visible (non-background) processes as "name<TAB>pid" ───────
     #   The PID (unix id) is what makes force-kill reliable: the display name
@@ -93,16 +104,23 @@ return out
 OSA
 )
 
-    #   Never target our own process tree (the shell running this script and
-    #   its ancestors, e.g. the terminal), regardless of app name.
-    local self_pid=$$
+    #   Never target our own process ancestry (the shell running this script and
+    #   whatever launched it - terminal, or an editor's integrated terminal),
+    #   regardless of app name. This is what lets us close editors like VS Code
+    #   safely without risking the host session. Kept as a space-padded string
+    #   (not an associative array) for bash 3.2 compatibility.
+    local spare_pids=" "
+    local apid
+    while IFS= read -r apid; do
+        [[ -n $apid ]] && spare_pids+="$apid "
+    done < <(_kapps_ancestor_pids)
 
     local -a targets=() target_pids=()
-    local line name pid
+    local name pid
     while IFS=$'\t' read -r name pid; do
         [[ -z $name || -z $pid ]] && continue
         _kapps_is_spared "$name" && continue
-        (( pid == self_pid )) && continue
+        [[ $spare_pids == *" $pid "* ]] && continue
         targets+=("$name")
         target_pids+=("$pid")
     done <<< "$raw"
