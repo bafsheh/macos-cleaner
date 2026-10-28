@@ -344,6 +344,7 @@ You can tweak behaviour with environment variables. No config file needed:
 | `CMD_TIMEOUT` | `60` | Max seconds for any single command |
 | `DIR_TIMEOUT` | `120` | Max seconds to delete one folder |
 | `SCAN_TIMEOUT` | `60` | Max seconds for project scans |
+| `CLEAN_JOBS` | `4` | Cleanup sections run at the same time (`1` = one at a time) |
 | `PY_SCAN_ROOTS` | auto | Folders to scan for Python caches |
 | `JS_SCAN_ROOTS` | auto | Folders to scan for JavaScript caches (auto includes `~/Desktop`) |
 | `TEMP_AGE_DAYS` | `3` | Temp items untouched this many days are removed |
