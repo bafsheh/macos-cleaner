@@ -19,6 +19,7 @@
 # │    PY_SCAN_ROOTS     space-separated roots for Python project scan            │
 # │    JS_SCAN_ROOTS     space-separated roots for JS project scan                │
 # │    SHUTDOWN_DELAY=15 cancellable shutdown countdown, seconds   (default 15)   │
+# │    TEMP_AGE_DAYS=3   temp items untouched this many days are removed (≥1)     │
 # │    DOCKER_TIMEOUT=300 per-command timeout for the Docker teardown             │
 # │    NO_COLOR          set to disable all colour output (CLICOLOR_FORCE=1 re-on)│
 # │                                                                               │
@@ -62,12 +63,14 @@ source "$LIB_DIR/ui.sh"
 
 # Action modules (registered in lib/menu.sh).
 source "$LIB_DIR/actions/cleanup.sh"
+source "$LIB_DIR/actions/temp_clean.sh"
 source "$LIB_DIR/actions/free_memory.sh"
 source "$LIB_DIR/actions/flush_dns.sh"
 source "$LIB_DIR/actions/free_ports.sh"
 source "$LIB_DIR/actions/kill_apps.sh"
 source "$LIB_DIR/actions/docker_clean.sh"
 source "$LIB_DIR/actions/ollama_clean.sh"
+source "$LIB_DIR/actions/disk_map.sh"
 
 # shellcheck source=lib/uninstaller.sh
 source "$LIB_DIR/uninstaller.sh"

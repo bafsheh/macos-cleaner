@@ -49,10 +49,7 @@ report_largest_dirs "$HOME/Library"    "~/Library subdirectories"      1 20
 section "1 · TRASH"
 
 say "Emptying Trash"
-clean_dir "$HOME/.Trash" "User Trash"
-for vol in /Volumes/*; do
-    [[ -d "$vol/.Trashes" ]] && clean_dir "$vol/.Trashes" "Trash on $(basename "$vol")" "sudo"
-done
+empty_trash
 
 # =============================================================================
 # § 2 · USER CACHES & LOGS
@@ -72,11 +69,11 @@ clean_dir "$HOME/Library/Saved Application State"             "Saved Application
 # =============================================================================
 section "3 · BROWSER CACHES"
 
-say "Browser caches (Safari, Chrome, Firefox, Brave, Arc)"
+say "Browser caches (Safari, Chrome, Firefox, Brave, Arc, Edge) + Electron apps"
 
-# Safari
+# Safari (website data such as LocalStorage holds logins - deliberately kept)
 clean_dir "$HOME/Library/Caches/com.apple.Safari"           "Safari cache"
-clean_dir "$HOME/Library/Safari/LocalStorage"                "Safari LocalStorage"
+clean_dir "$HOME/Library/Containers/com.apple.Safari/Data/Library/Caches"  "Safari container cache"
 
 # Google Chrome
 clean_dir "$HOME/Library/Caches/Google/Chrome"                                   "Chrome cache"
@@ -92,6 +89,10 @@ clean_dir "$HOME/Library/Caches/BraveSoftware"               "Brave cache"
 # Arc
 clean_dir "$HOME/Library/Caches/Arc"                         "Arc cache"
 
+# Every Chromium / Electron profile (all browser profiles, not just Default,
+# plus Slack · Discord · Notion · Figma · Teams · Postman · VS Code & forks …)
+sweep_chromium_caches "Chromium & Electron app caches (all profiles)" "$HOME/Library/Application Support"
+
 # =============================================================================
 # § 4 · XCODE & APPLE DEVELOPER TOOLS
 # =============================================================================
@@ -100,8 +101,17 @@ section "4 · XCODE & APPLE DEVELOPER TOOLS"
 say "Xcode derived data, archives, and simulator caches"
 clean_dir "$HOME/Library/Developer/Xcode/DerivedData"          "Xcode DerivedData"
 clean_dir "$HOME/Library/Developer/Xcode/Archives"             "Xcode Archives (old builds)"
-clean_dir "$HOME/Library/Developer/Xcode/iOS DeviceSupport"    "Xcode iOS DeviceSupport"
+# iOS · watchOS · tvOS · visionOS device symbols (re-copied on next device connect)
+for _ds in "$HOME/Library/Developer/Xcode/"*DeviceSupport; do
+    [[ -d $_ds ]] && clean_dir "$_ds" "Xcode ${_ds##*/}"
+done
+clean_dir "$HOME/Library/Developer/Xcode/UserData/Previews"    "SwiftUI Previews simulators"
+clean_dir "$HOME/Library/Developer/Xcode/DocumentationCache"   "Xcode documentation cache"
 clean_dir "$HOME/Library/Developer/CoreSimulator/Caches"       "iOS Simulator caches"
+# Simulators whose runtime is no longer installed can never boot again.
+if xcrun --find simctl &>/dev/null; then
+    run_step "Delete unavailable simulators"  "xcrun simctl delete unavailable"
+fi
 
 # =============================================================================
 # § 5 · SWIFT PACKAGE MANAGER · COCOAPODS · CARTHAGE · MINT
@@ -161,6 +171,7 @@ command -v deno &>/dev/null && run_step "deno clean"            "deno clean"
 
 # Cache / store directories
 clean_dir "$HOME/.npm/_cacache"              "npm content-addressable cache"
+clean_dir "$HOME/.npm/_npx"                  "npx package cache"
 clean_dir "$HOME/.npm/_logs"                 "npm logs"
 clean_dir "$HOME/.yarn/cache"                "Yarn classic cache dir"
 clean_dir "$HOME/.cache/yarn"                "Yarn cache (~/.cache/yarn)"
@@ -178,6 +189,10 @@ clean_dir "$HOME/.cache/turbo"               "Turbo cache (~/.cache)"
 clean_dir "$HOME/.cache/Cypress"             "Cypress binary cache"
 clean_dir "$HOME/Library/Caches/Cypress"     "Cypress cache (Library)"
 clean_dir "$HOME/.cache/playwright"          "Playwright browser binaries cache"
+clean_dir "$HOME/Library/Caches/ms-playwright" "Playwright browsers (Library)"
+clean_dir "$HOME/.cache/puppeteer"           "Puppeteer Chrome downloads"
+clean_dir "$HOME/.cache/chrome-devtools-mcp" "Chrome for Testing (chrome-devtools-mcp)"
+clean_dir "$HOME/.cache/selenium"            "Selenium driver cache"
 
 # =============================================================================
 # § 8 · JAVASCRIPT / NODE.JS PROJECT-LEVEL CACHES
@@ -195,6 +210,7 @@ _scan_and_delete \
         -name ".parcel-cache" \
         -o -name "jest_cache"  \
         -o -name ".turbo"      \
+        -o -path "*/.next/cache" \
     \) \)
 
 _scan_and_delete \
@@ -243,6 +259,9 @@ clean_dir "$HOME/.cache/pdm"               "PDM cache"
 
 # virtualenv seed cache
 clean_dir "$HOME/.cache/virtualenv"        "virtualenv seed cache"
+
+# pre-commit hook environments (rebuilt on next commit)
+clean_dir "$HOME/.cache/pre-commit"        "pre-commit environments"
 
 # pyenv build cache
 clean_dir "$HOME/.pyenv/cache"             "pyenv build artefacts"
@@ -846,13 +865,12 @@ else
 fi
 
 # =============================================================================
-# § 31 · OLD /tmp ITEMS  (>3 days)
+# § 31 · TEMPORARY FILES  (untouched for TEMP_AGE_DAYS days, default 3)
 # =============================================================================
-section "31 · OLD /tmp ITEMS"
+section "31 · TEMPORARY FILES"
 
-say "Removing items older than 3 days from /tmp directories"
-clean_old_tmp "/private/tmp"        "/private/tmp"        "sudo"
-clean_old_tmp "user TMPDIR"         "${TMPDIR:-/tmp}"
+say "Removing temp items untouched for ${TEMP_AGE_DAYS}+ days (in-use items are kept)"
+temp_purge_all
 
 # =============================================================================
 # § 32 · SYSTEM DATA  (app cache sweep · diagnostics · informational)
@@ -920,6 +938,10 @@ info "Steps skipped (missing)  : $TOTAL_SKIPPED_MISSING"
 info "Steps skipped (in use)   : $TOTAL_SKIPPED_PROTECTED"
 info "Steps failed             : $TOTAL_FAILED"
 info "Steps timed out          : $TOTAL_TIMEDOUT"
+if (( TOTAL_TCC_BLOCKED > 0 )); then
+    warn "${TOTAL_TCC_BLOCKED} folder(s) were blocked by macOS privacy and left as-is."
+    fda_hint
+fi
 info "Wall-clock elapsed       : ${ELAPSED}s"
 info "Full log                 : $LOG_FILE"
 ok   "Cleanup complete."

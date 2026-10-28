@@ -6,10 +6,12 @@
 #     • disk_free / human_size / dir_size_kb - measurement
 #     • run_timeout                          - portable timeout wrapper
 #     • run_step                             - logged command execution
-#     • clean_dir / clean_old_tmp           - safe content deletion
+#     • clean_dir / purge_stale             - safe content deletion
+#     • sweep_caches / sweep_chromium_caches - bulk cache sweeps
+#     • empty_trash                          - Trash (Finder fallback under TCC)
 #     • clean_tm_snapshots                   - Time Machine local snapshots
 #     • report_largest_dirs                  - informational disk report
-#     • _scan_and_delete                     - dev-folder artefact sweeper
+#     • dev_roots / _scan_and_delete         - dev-folder artefact sweeper
 #
 #   Requires (sourced earlier): colors.sh, core.sh (counters/timeouts), logging.sh
 # =============================================================================
@@ -33,12 +35,34 @@ dir_size_kb() {
     du -sk "$p" 2>/dev/null | awk '{print $1+0}'
 }
 
+# Free space on the boot volume in KB (APFS: shared by every volume).
+disk_avail_kb() { df -k / | awk 'NR==2 {print $4+0}'; }
+
+# =============================================================================
+# § is_tcc_blocked PATH
+#
+#   True when PATH exists but macOS privacy protection (TCC) refuses to list
+#   it - e.g. ~/.Trash, ~/Library/Mail, Safari or Photos containers when the
+#   terminal lacks Full Disk Access. Without this check `du` and `find` fail
+#   quietly, sizes read as 0, and a folder full of data looks "already empty".
+# =============================================================================
+is_tcc_blocked() {
+    [[ -d $1 ]] && ! ls -A "$1" >/dev/null 2>&1
+}
+
+# Prints the one-time "how to grant Full Disk Access" hint.
+fda_hint() {
+    info "tip     : give your terminal Full Disk Access to clean protected folders:"
+    info "          System Settings ▸ Privacy & Security ▸ Full Disk Access ▸ add"
+    info "          your terminal app (Terminal, iTerm, VS Code, …), then reopen it."
+}
+
 # =============================================================================
 # § TIMEOUT WRAPPER
 #
 #   Preference order:
 #     1. gtimeout  (brew install coreutils)   - most reliable on macOS
-#     2. timeout   (available on macOS 12+)
+#     2. timeout   (if some other package put one on PATH; macOS ships none)
 #     3. pure-bash watchdog fallback
 #
 #   Exit code 124 = timed out  (POSIX timeout convention)
@@ -154,6 +178,15 @@ clean_dir() {
         return 0
     fi
 
+    # User-owned targets only: for sudo targets an ordinary root-only permission
+    # error would be misread as TCC.
+    if [[ -z $sudo_prefix ]] && is_tcc_blocked "$target"; then
+        warn "blocked by macOS privacy (needs Full Disk Access) ← $label"
+        (( TOTAL_SKIPPED_PROTECTED++ )); (( TOTAL_TCC_BLOCKED++ ))
+        echo
+        return 0
+    fi
+
     local -i size_before_kb items t0 t1 elapsed rc=0
     local    size_before_h
     size_before_kb=$(dir_size_kb "$target")
@@ -264,6 +297,71 @@ sweep_caches() {
 
     (( skipped > 0 )) && info "skipped : ${skipped} iCloud-sync cache(s) (may hold un-uploaded data)"
 
+    _sweep_dirs "$label" ${dirs[@]+"${dirs[@]}"}
+}
+
+# =============================================================================
+# § sweep_chromium_caches LABEL BASE
+#
+#   Clears the disposable caches of every Chromium / Electron profile under BASE
+#   (normally ~/Library/Application Support): Chrome, Edge, Brave, Arc and Opera
+#   profiles (all of them, not just Default) plus Electron apps such as Slack,
+#   Discord, Notion, Figma, Teams, Postman, VS Code and its forks.
+#
+#   A folder is only treated as a Chromium profile when it holds a "Code Cache"
+#   or "GPUCache" folder - names only Chromium uses - so a generic folder that
+#   merely happens to be called "Cache" elsewhere is never touched. Cookies,
+#   logins, local storage, IndexedDB and settings are left alone.
+# =============================================================================
+declare -ra CHROMIUM_CACHE_DIRS=(
+    "Cache" "Code Cache" "GPUCache" "DawnCache" "DawnGraphiteCache"
+    "DawnWebGPUCache" "GrShaderCache" "ShaderCache"
+    "Service Worker/CacheStorage" "Service Worker/ScriptCache"
+)
+
+sweep_chromium_caches() {
+    local label="$1" base="$2"
+
+    step "[$label]"
+    info "scan    : $base  (Chromium/Electron profiles)"
+
+    if [[ ! -d $base ]]; then
+        info "status  : not present - nothing to do"
+        (( TOTAL_SKIPPED_MISSING++ ))
+        echo; return 0
+    fi
+
+    local -a dirs=()
+    local marker profile sub
+    while IFS= read -r marker; do
+        [[ -n $marker ]] || continue
+        profile=${marker%/*}
+        [[ $profile == "$base" || $profile =~ $SWEEP_SKIP_RE ]] && continue
+        for sub in "${CHROMIUM_CACHE_DIRS[@]}"; do
+            [[ -d "$profile/$sub" ]] && dirs+=("$profile/$sub")
+        done
+    done < <(find "$base" -maxdepth 6 -type d \( -name "Code Cache" -o -name "GPUCache" \) -prune 2>/dev/null)
+
+    # A profile with both markers is listed twice - de-duplicate the targets.
+    local -a uniq=()
+    if (( ${#dirs[@]} > 0 )); then
+        while IFS= read -r sub; do uniq+=("$sub"); done < <(printf '%s\n' "${dirs[@]}" | sort -u)
+    fi
+
+    _sweep_dirs "$label" ${uniq[@]+"${uniq[@]}"}
+}
+
+# =============================================================================
+# § _sweep_dirs LABEL DIR...
+#
+#   Shared delete loop for the sweep_* helpers: clears the contents of each DIR,
+#   keeps the directory, and prints one aggregate summary line.
+# =============================================================================
+_sweep_dirs() {
+    local label="$1"; shift
+    local -a dirs=("$@")
+    local d
+
     if (( ${#dirs[@]} == 0 )); then
         info "status  : no matching cache directories"
         echo; return 0
@@ -293,42 +391,175 @@ sweep_caches() {
 }
 
 # =============================================================================
-# § clean_old_tmp LABEL PATH [SUDO_PREFIX]
+# § stale_entries BASE DEPTH [SUDO_PREFIX]
 #
-#   Removes items inside PATH that have not been modified in >3 days.
-#   Safe to call on any tmp-like directory.
+#   Prints (one per line) every entry exactly DEPTH levels below BASE that is
+#   *entirely* stale: nothing inside it was modified or created in the last
+#   TEMP_AGE_DAYS days and it holds no socket. Entries are judged as a whole,
+#   so a folder is either removed completely or kept intact - never
+#   half-emptied while an app still uses it.
+#
+#   Never listed, whatever their age:
+#     • sockets and anything containing one (ssh-agent, tmux, VS Code, Docker)
+#     • launchd / ssh / tmux / X11 session folders (TEMP_KEEP_RE) - these are
+#       created at boot, so on a Mac that has been up for days they *look* old
+#       but deleting them breaks ssh-agent and tmux until the next reboot
+#     • items owned by someone else, unless SUDO_PREFIX is given
+#     • anything find cannot fully read (can't verify it's stale → keep it)
 # =============================================================================
-clean_old_tmp() {
-    local label="$1"
-    local path="$2"
-    local sudo_prefix="${3:-}"
+declare -r TEMP_KEEP_RE='^(com\.apple\.launchd\.|tmux-|ssh-|launch-|\.X11-unix$|\.ICE-unix$|\.font-unix$|\.vbox-|powerlog$|mac_cleaner_)'
 
-    step "[$label  (mtime >3 days)]"
-    info "path    : $path"
+stale_entries() {
+    local base="$1" sudo_prefix="${3:-}"
+    local -i depth=$2
+    [[ -d $base ]] || return 0
 
-    if [[ ! -d $path ]]; then
+    local e hit
+    local -i rc
+    while IFS= read -r e; do
+        [[ -n $e ]] || continue
+        [[ ${e##*/} =~ $TEMP_KEEP_RE ]] && continue
+        [[ -n $sudo_prefix || -O $e ]] || continue
+        rc=0
+        # shellcheck disable=SC2086
+        hit=$($sudo_prefix find "$e" \( -type s -o -mtime "-$TEMP_AGE_DAYS" -o -ctime "-$TEMP_AGE_DAYS" \) \
+                  -print -quit 2>/dev/null) || rc=$?
+        [[ -z $hit ]] && (( rc == 0 )) && printf '%s\n' "$e"
+    done < <($sudo_prefix find "$base" -mindepth "$depth" -maxdepth "$depth" 2>/dev/null)
+}
+
+# =============================================================================
+# § purge_stale LABEL BASE DEPTH [SUDO_PREFIX]
+#
+#   Removes every entry stale_entries reports for BASE/DEPTH, logging what
+#   went and how much space it freed. Safe on any tmp-like directory.
+# =============================================================================
+purge_stale() {
+    local label="$1" base="$2" depth="$3" sudo_prefix="${4:-}"
+
+    step "[$label  (untouched ${TEMP_AGE_DAYS}+ days)]"
+    info "path    : $base"
+
+    if [[ ! -d $base ]]; then
         info "status  : not present - nothing to do"
+        (( TOTAL_SKIPPED_MISSING++ ))
         echo; return 0
     fi
 
-    local -i cnt=0 rc=0
-    # shellcheck disable=SC2086
-    cnt=$( $sudo_prefix find "$path" -mindepth 1 -mtime +3 2>/dev/null \
-           | wc -l | tr -d ' ' )
-    info "found   : $cnt old items"
+    local -a stale=()
+    local e
+    while IFS= read -r e; do stale+=("$e"); done < <(stale_entries "$base" "$depth" "$sudo_prefix")
 
-    if (( cnt > 0 )); then
+    if (( ${#stale[@]} == 0 )); then
+        info "status  : nothing stale - recent and in-use items kept"
+        echo; return 0
+    fi
+    info "found   : ${#stale[@]} stale item(s)"
+
+    local -i kb freed=0 removed=0 failed=0
+    for e in "${stale[@]}"; do
         # shellcheck disable=SC2086
-        $sudo_prefix find "$path" -mindepth 1 -mtime +3 -delete 2>/dev/null || rc=$?
-        if (( rc == 0 )); then
-            (( TOTAL_CLEANED++ ))
-            ok "removed $cnt items ← $label"
+        kb=$($sudo_prefix du -sk "$e" 2>/dev/null | awk '{print $1+0}')
+        # shellcheck disable=SC2086
+        run_timeout "$DIR_TIMEOUT" $sudo_prefix rm -rf "$e" 2>/dev/null
+        if [[ ! -e $e && ! -L $e ]]; then
+            (( removed++ )); (( freed += kb ))
+            (( removed <= 8 )) && info "  removed : ${e##*/}  ($(human_size "$kb"))"
         else
-            (( TOTAL_FAILED++ ))
-            warn "partial removal (exit=${rc}) ← $label"
+            (( failed++ ))
         fi
+    done
+    (( removed > 8 )) && info "  … and $(( removed - 8 )) more"
+
+    (( TOTAL_FREED_KB += freed ))
+    if (( failed == 0 )); then
+        (( TOTAL_CLEANED++ ))
+        ok "freed $(human_size $freed) from ${removed} item(s) ← $label"
     else
-        info "status  : nothing to clean"
+        (( TOTAL_SKIPPED_PROTECTED++ ))
+        warn "freed $(human_size $freed); ${failed} item(s) could not be removed ← $label"
+    fi
+    echo
+}
+
+# =============================================================================
+# § empty_trash
+#
+#   Empties your Trash: ~/.Trash, iCloud Drive's Trash, and your Trash on
+#   every mounted external volume.
+#
+#   macOS protects ~/.Trash with privacy controls (TCC). Unless the terminal
+#   has Full Disk Access it cannot even list the folder, so deleting it
+#   directly silently does nothing. In that case we ask Finder to empty the
+#   Trash instead - the same as Finder ▸ Empty Trash. The first time, macOS
+#   asks once whether your terminal may control Finder.
+# =============================================================================
+empty_trash() {
+    local trash="$HOME/.Trash"
+
+    if ! is_tcc_blocked "$trash"; then
+        clean_dir "$trash" "User Trash"
+        clean_dir "$HOME/Library/Mobile Documents/com~apple~CloudDocs/.Trash" "iCloud Drive Trash"
+        local vol
+        for vol in /Volumes/*; do
+            [[ $vol -ef / ]] && continue                 # boot volume alias
+            [[ -d "$vol/.Trashes/$UID" ]] && clean_dir "$vol/.Trashes/$UID" "Trash on ${vol##*/}"
+        done
+        return 0
+    fi
+
+    step "[Trash  (via Finder)]"
+    info "note    : macOS privacy blocks direct access to ~/.Trash - asking Finder"
+
+    # Finder's own confirmation dialog is switched off just for this call and
+    # restored afterwards. Output: "<items before> <items left>".
+    local out
+    local -i before_kb after_kb freed rc=0
+    before_kb=$(disk_avail_kb)
+    out=$(run_timeout 960 osascript \
+        -e 'tell application "Finder"' \
+        -e '  set n to count of items of trash' \
+        -e '  if n > 0 then' \
+        -e '    set w to warns before emptying of trash' \
+        -e '    set warns before emptying of trash to false' \
+        -e '    try' \
+        -e '      with timeout of 900 seconds' \
+        -e '        empty trash' \
+        -e '      end timeout' \
+        -e '    end try' \
+        -e '    set warns before emptying of trash to w' \
+        -e '  end if' \
+        -e '  return (n as text) & " " & ((count of items of trash) as text)' \
+        -e 'end tell' 2>&1) || rc=$?
+    after_kb=$(disk_avail_kb)
+
+    if (( rc == 0 )) && [[ $out =~ ^([0-9]+)\ ([0-9]+)$ ]]; then
+        local -i n=${BASH_REMATCH[1]} left=${BASH_REMATCH[2]}
+        if (( n == 0 )); then
+            info "status  : Trash is already empty"
+            echo; return 0
+        fi
+        (( freed = after_kb - before_kb )) || true
+        (( freed < 0 )) && freed=0
+        (( TOTAL_FREED_KB += freed ))
+        (( TOTAL_CLEANED++ ))
+        if (( left == 0 )); then
+            ok "emptied ${n} item(s), ~$(human_size $freed) freed ← Trash (Finder)"
+        else
+            warn "emptied $(( n - left )) of ${n} item(s); ${left} in use or locked ← Trash (Finder)"
+        fi
+    elif (( rc == 124 )); then
+        warn "Finder is still emptying the Trash in the background (large Trash)"
+    elif [[ $out == *-1743* ]]; then
+        (( TOTAL_FAILED++ ))
+        warn "macOS did not allow this terminal to control Finder ← Trash"
+        info "allow   : System Settings ▸ Privacy & Security ▸ Automation ▸"
+        info "          your terminal ▸ turn on Finder - or use Full Disk Access:"
+        fda_hint
+    else
+        (( TOTAL_FAILED++ ))
+        warn "Finder could not empty the Trash (exit=${rc}) ← Trash"
+        [[ -n $out ]] && info "detail  : $out"
     fi
     echo
 }
@@ -422,6 +653,38 @@ report_largest_dirs() {
 }
 
 # =============================================================================
+# § dev_roots [ENVVAR]
+#
+#   Prints the folders where code projects usually live, one per line. If
+#   ENVVAR names a non-empty variable, its space-separated list wins instead.
+#   ~/Desktop is included: many people keep their projects there.
+#   On a case-insensitive disk (the macOS default) ~/Projects and ~/projects
+#   are the same folder, so duplicates are dropped by inode.
+# =============================================================================
+dev_roots() {
+    local envvar="${1:-}" d seen
+    local -a list=()
+    if [[ -n $envvar && -n ${!envvar:-} ]]; then
+        read -ra list <<< "${!envvar}"
+    else
+        list=(
+            "$HOME/Desktop"   "$HOME/Documents" "$HOME/Developer" "$HOME/Projects"
+            "$HOME/projects"  "$HOME/Code"      "$HOME/code"      "$HOME/dev"
+            "$HOME/Dev"       "$HOME/repos"     "$HOME/Repos"     "$HOME/src"
+            "$HOME/workspace" "$HOME/Workspace" "$HOME/Sites"     "$HOME/work"
+            "$HOME/Work"
+        )
+    fi
+    local -a out=()
+    for d in "${list[@]}"; do
+        [[ -d $d ]] || continue
+        for seen in ${out[@]+"${out[@]}"}; do [[ $d -ef $seen ]] && continue 2; done
+        out+=("$d")
+        printf '%s\n' "$d"
+    done
+}
+
+# =============================================================================
 # § _scan_and_delete  LABEL ENVVAR DESCRIPTION FIND_PREDICATES...
 #
 #   Finds and removes directories/files matching FIND_PREDICATES inside
@@ -442,18 +705,8 @@ _scan_and_delete() {
 
     # ── build root list ─────────────────────────────────────────────────────
     local -a roots=()
-    if [[ -n ${!envvar:-} ]]; then
-        read -ra roots <<< "${!envvar}"
-    else
-        local d
-        for d in \
-            "$HOME/Documents" "$HOME/Developer" "$HOME/Projects" "$HOME/projects" \
-            "$HOME/Code"      "$HOME/code"      "$HOME/dev"      "$HOME/Dev"     \
-            "$HOME/repos"     "$HOME/Repos"     "$HOME/src"      "$HOME/workspace" \
-            "$HOME/Workspace" "$HOME/Sites"     "$HOME/work"     "$HOME/Work"; do
-            [[ -d $d ]] && roots+=("$d")
-        done
-    fi
+    local d
+    while IFS= read -r d; do roots+=("$d"); done < <(dev_roots "$envvar")
 
     if (( ${#roots[@]} == 0 )); then
         info "status  : no dev folders found"

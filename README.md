@@ -114,7 +114,7 @@ You land on the main menu:
 
 ```
   ╔══════════════════════════════════════════════════════╗
-  ║   macOS Cleaner    -    v1.3.0                        ║
+  ║   macOS Cleaner    -    v1.4.0                        ║
   ╠══════════════════════════════════════════════════════╣
   ║   Safe disk-space cleaner + maintenance              ║
   ║   Disk: 249Gi free of 460Gi                          ║
@@ -122,6 +122,7 @@ You land on the main menu:
 
   What would you like to do?
   ❯  Cleanup & maintenance
+     Disk map - see what's using space
      Uninstall an app or package
      Exit
 ```
@@ -178,7 +179,9 @@ menu, where you can run more or pick **Exit** to finish.
 
 | Option | In plain English | Good to know |
 |---|---|---|
-| **Clean up** | The main event. Clears caches, logs, leftover app and tool files, and the Trash. | Safe. Frees the most space. |
+| **Clean up** | The main event. Clears caches, logs, leftover app and tool files, temp files, and the Trash. | Safe. Frees the most space. |
+| **Empty Trash** | Empties your Trash, including iCloud Drive's and external drives'. | Works even without Full Disk Access (it asks Finder to do it). |
+| **Clean temp files** | Removes temporary files nothing has used for 3+ days, plus old Claude Code session folders. | Safe. Anything in use or touched recently is kept. |
 | **Free up memory** | Releases unused memory so your Mac feels snappier. | Safe. Deletes no files. |
 | **Flush DNS cache** | Refreshes your Mac's address book for websites, which fixes some loading issues. | Asks for your password. |
 | **Free common dev ports** | Closes stuck background programs that block common developer connections. | For developers. Leaves normal apps alone. |
@@ -186,6 +189,33 @@ menu, where you can run more or pick **Exit** to finish.
 | **Docker, remove ALL** | Wipes all Docker containers and images. | ⚠️ For developers. Deletes a lot. Pick it only if you mean it. |
 | **Ollama, remove ALL** | Deletes all downloaded AI models. | ⚠️ Large re-downloads later if you need them again. |
 | **Shut down when done** | Turns the Mac off after everything finishes. | You get a countdown. Press any key to cancel. |
+
+---
+
+## 🗺️ Disk map
+
+Pick **Disk map** on the main menu to see where your space went. The first scan of
+your home folder takes about a minute.
+
+- **Colour tiles**, sized by space used: code projects, documents and media, iOS and
+  Android SDKs, AI models, package caches, and everything else.
+- **Green stripes** mark folders that are safe to remove.
+- **Header**: free space after cleanup, how much is safe to remove, how much needs
+  your review, and how much sits outside your home folder (system and apps).
+
+| Key | What it does |
+|---|---|
+| `1`-`9` | Open the numbered tile |
+| `o` | Pick any folder from a list |
+| `u` or `←` | Go up one level |
+| `v` | Switch between the category view and the cleanup view (green = safe, orange = review) |
+| `r` | Open the recommendations: tick what to clean, then confirm |
+| `s` | Rescan |
+| `q` | Back to the main menu |
+
+In the recommendations list, the **safe** items start ticked and the **review**
+items do not. Nothing is deleted until you confirm, and the Docker and Ollama wipes
+still ask once more.
 
 ---
 
@@ -205,6 +235,16 @@ You are not inside the folder. Run `cd macos-cleaner` first, then
 **It asked for my password. Is that a virus?**
 No. macOS requires your password to clean protected system files. The tool runs
 on your Mac and sends nothing anywhere.
+
+**It says "blocked by macOS privacy (needs Full Disk Access)"**
+macOS hides some folders (Mail, Safari, Photos caches) from apps until you allow it.
+To let the tool clean them: System Settings ▸ Privacy & Security ▸ Full Disk Access,
+add your terminal app (Terminal, iTerm, VS Code…), then reopen it. Skipping this is
+fine: those folders are just left alone.
+
+**My Trash did not empty before**
+macOS blocks direct access to the Trash folder. The tool now asks Finder to empty it.
+The first time, macOS asks whether your terminal may control Finder. Click **OK**.
 
 **Did it delete my files?**
 No. It removes only regenerable junk. Want proof? Every run saves a full log to
@@ -240,13 +280,13 @@ use one, that section finds nothing and moves on.
 | # | Area |
 |---|------|
 | 0 | Disk usage report before cleaning (info only) |
-| 1 | Trash, yours plus all connected drives |
+| 1 | Trash: yours, iCloud Drive's, and your Trash on connected drives (via Finder if needed) |
 | 2 | System and app caches and logs in your Library |
-| 3 | Browser caches: Safari, Chrome, Firefox, Brave, Arc |
-| 4 | Xcode: DerivedData, Archives, device support, Simulator |
+| 3 | Browser caches (every profile): Safari, Chrome, Firefox, Brave, Arc, Edge, plus Electron apps like Slack, Discord, Notion, Figma |
+| 4 | Xcode: DerivedData, Archives, device support, SwiftUI Previews, Simulator caches, unavailable simulators |
 | 5 | Apple dev tools: Swift PM, CocoaPods, Carthage, Mint |
 | 6 | Homebrew: orphaned packages, cleanup, logs |
-| 7 | JavaScript / Node: npm, yarn, pnpm, bun, deno, volta, nvm, turbo |
+| 7 | JavaScript / Node: npm and npx, yarn, pnpm, bun, deno, volta, nvm, turbo, Puppeteer, Playwright |
 | 8 | JavaScript project caches: `.next/cache`, `.turbo`, jest, eslint |
 | 9 | Python tools: pip, uv, poetry, pipenv, hatch, pdm, pyenv, conda |
 | 10 | Python project caches: `__pycache__`, pytest, mypy, ruff |
@@ -267,7 +307,7 @@ use one, that section finds nothing and moves on.
 | 25 | Time Machine local snapshots |
 | 26 | Quick Look thumbnails and old iOS update files |
 | 27 | System caches and logs (needs your password) |
-| 28 | Old temporary files (older than 3 days) |
+| 28 | Temporary files untouched for 3+ days, plus old Claude Code session folders |
 | (end) | Disk usage report after cleaning, plus a summary |
 
 </details>
@@ -302,7 +342,8 @@ You can tweak behaviour with environment variables. No config file needed:
 | `DIR_TIMEOUT` | `120` | Max seconds to delete one folder |
 | `SCAN_TIMEOUT` | `60` | Max seconds for project scans |
 | `PY_SCAN_ROOTS` | auto | Folders to scan for Python caches |
-| `JS_SCAN_ROOTS` | auto | Folders to scan for JavaScript caches |
+| `JS_SCAN_ROOTS` | auto | Folders to scan for JavaScript caches (auto includes `~/Desktop`) |
+| `TEMP_AGE_DAYS` | `3` | Temp items untouched this many days are removed |
 | `SHUTDOWN_DELAY` | `15` | Seconds in the cancellable shutdown countdown |
 | `KILL_APPS_ASSUME_YES` | `0` | Set `1` to quit apps without confirmation |
 | `DOCKER_CLEAN_ASSUME_YES` | `0` | Set `1` to allow the Docker wipe without confirmation |

@@ -20,9 +20,11 @@
 #   ACTION_LABELS[i] is shown in the checkbox list AND in the queue banner.
 #   ACTION_FNS[i]    is the function invoked when that row is selected.
 #   Execution order is the array order (= the list order the user sees).
-declare -ra ACTION_KEYS=(clean mem dns ports apps docker ollama)
+declare -ra ACTION_KEYS=(clean trash temp mem dns ports apps docker ollama)
 declare -ra ACTION_LABELS=(
     "Clean up             (caches · logs · package stores · Microsoft · Trash)"
+    "Empty Trash          (all volumes · works without Full Disk Access)"
+    "Clean temp files     (stale /tmp · TMPDIR · old Claude Code sessions)"
     "Free up memory       (release inactive & cached RAM)"
     "Flush DNS cache"
     "Free common dev ports"
@@ -30,7 +32,13 @@ declare -ra ACTION_LABELS=(
     "Docker - remove ALL containers & images      ⚠ destructive"
     "Ollama / llama - remove ALL models & caches  ⚠ destructive"
 )
-declare -ra ACTION_FNS=(run_clean free_memory flush_dns free_ports kill_apps docker_clean ollama_clean)
+declare -ra ACTION_FNS=(run_clean _trash_action clean_temp free_memory flush_dns free_ports kill_apps docker_clean ollama_clean)
+
+# Standalone "Empty Trash" row: empty_trash plus its own heading.
+_trash_action() {
+    section "TRASH"
+    empty_trash
+}
 
 # =============================================================================
 # § _run_action_queue ACTION_INDEX...
@@ -181,9 +189,9 @@ _shutdown_system() {
 # =============================================================================
 # § show_main_menu
 #
-#   Top-level menu. Dispatches to the cleanup multi-select flow, the
-#   uninstaller, or exit. Loops back after each action so the user can chain
-#   multiple operations in one session.
+#   Top-level menu. Dispatches to the cleanup multi-select flow, the disk map,
+#   the uninstaller, or exit. Loops back after each action so the user can
+#   chain multiple operations in one session.
 # =============================================================================
 show_main_menu() {
     clear 2>/dev/null || true
@@ -191,7 +199,7 @@ show_main_menu() {
     local rule; rule=$(printf '═%.0s' {1..54})
     printf '\n'
     printf "  ${ACCENT}${BOLD}╔%s╗${NC}\n" "$rule"
-    printf "  ${ACCENT}${BOLD}║${NC}  ${WHT}${BOLD}%-50s${NC}  ${ACCENT}${BOLD}║${NC}\n" "macOS Cleaner    -    v1.3.0"
+    printf "  ${ACCENT}${BOLD}║${NC}  ${WHT}${BOLD}%-50s${NC}  ${ACCENT}${BOLD}║${NC}\n" "macOS Cleaner    -    v1.4.0"
     printf "  ${ACCENT}${BOLD}╠%s╣${NC}\n" "$rule"
     printf "  ${ACCENT}${BOLD}║${NC}  ${DIM}%-50s${NC}  ${ACCENT}${BOLD}║${NC}\n" "Safe disk-space cleaner + maintenance"
     printf "  ${ACCENT}${BOLD}║${NC}  ${DIM}%-50s${NC}  ${ACCENT}${BOLD}║${NC}\n" "Disk: $(disk_free)"
@@ -199,17 +207,19 @@ show_main_menu() {
 
     local -a items=(
         "Cleanup & maintenance"
+        "Disk map - see what's using space"
         "Uninstall an app or package"
         "Exit"
     )
 
-    MENU_RESULT=2
+    MENU_RESULT=3
     interactive_menu "What would you like to do?" "${items[@]}"
 
     printf '\n'
     case $MENU_RESULT in
         0) run_cleanup_menu;  show_main_menu ;;
-        1) run_uninstaller;   show_main_menu ;;
+        1) run_disk_map;      show_main_menu ;;
+        2) run_uninstaller;   show_main_menu ;;
         *) say "Bye."; printf '\n'; exit 0 ;;
     esac
 }

@@ -5,6 +5,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.0] - 2026-10-28
+
+### Added
+- **Disk map** (main menu): a colour treemap of your home folder drawn in the terminal, two
+  levels deep. Tiles are coloured by category (code projects, documents, SDKs, AI models, package
+  caches) and hatched green when safe to remove. A header shows free space after cleanup, safe vs.
+  needs-review totals, and space outside your home folder. Open tiles with `1`-`9`/`o`, go up with
+  `u`, switch to a cleanup view with `v`. Rendering lives in `lib/diskmap.awk` (plain macOS awk).
+- **Recommendations & clean** inside the disk map (`r`): measures known space hogs (npm/npx, uv,
+  Puppeteer, Gradle, Xcode, app caches, stale temp, Android SDK, Simulators, Docker, Ollama, idle
+  `node_modules`, Next.js/Turbo build output, Claude Code worktrees, macOS installers). Safe
+  items start ticked; one confirmation runs them. Worktrees are removed with `git worktree remove`,
+  which refuses any worktree with uncommitted changes.
+- **Empty Trash** and **Clean temp files** as standalone checklist actions.
+- Cleanup now also covers: every Chromium/Electron profile's caches (all Chrome/Edge/Brave
+  profiles, Slack, Discord, Notion, Figma, VS Code…), the npx cache (`~/.npm/_npx`), Puppeteer,
+  Playwright (`~/Library/Caches/ms-playwright`), Chrome for Testing and Selenium downloads, the
+  pre-commit cache, watchOS/tvOS/visionOS device support, SwiftUI Previews, the Xcode documentation
+  cache, the Safari container cache, and `xcrun simctl delete unavailable`.
+- `TEMP_AGE_DAYS` setting (default 3).
+
+### Fixed
+- **Trash never emptied.** macOS privacy (TCC) blocks the terminal from even listing `~/.Trash`
+  without Full Disk Access, so the step silently reported "already empty". It now detects this and
+  asks Finder to empty the Trash (including iCloud Drive and external drives).
+- **Silent "already empty" on protected folders.** Any folder macOS privacy refuses to list (Mail,
+  Safari, Photos caches) is now reported as blocked, with a Full Disk Access tip in the summary.
+- **Temp cleanup did little and was risky.** It deleted files one by one with `-mtime +3`, so folders
+  were left half-empty and reported as failures, and no space freed was counted. On a Mac up for more
+  than 3 days it could also delete the launchd/ssh-agent and tmux socket folders in `/private/tmp`.
+  Temp items are now judged whole: removed only if nothing inside was modified or created within
+  `TEMP_AGE_DAYS` and nothing inside is a socket. It now also covers `/private/var/tmp` and old Claude
+  Code session folders, and reports space freed.
+- The JS project scan claimed to clean `.next/cache` but never matched it. It now does, and project
+  scans include `~/Desktop`. Duplicate scan roots on case-insensitive disks (`Projects`/`projects`)
+  are no longer scanned twice.
+
+### Changed
+- Safari `LocalStorage` is no longer deleted: it is website data (it can hold logins), not a cache.
+- Trash on external volumes is cleaned per-user (`.Trashes/<uid>`) without sudo, instead of wiping
+  every user's Trash on the volume.
+
+---
+
 ## [1.3.0] - 2026-06-07
 
 ### Added
