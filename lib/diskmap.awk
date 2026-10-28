@@ -8,15 +8,17 @@
 #   diagonal hatch (category view) or a green fill (cleanup view).
 #
 #   Input (TSV, one node per line, already sorted largest-first per level):
-#     kind  id  parent  kb  category  status  label  number
+#     kind  id  parent  kb  category  status  label  number  live
 #       kind      1 = top-level tile, 2 = child of `parent`
 #       category  code | docs | ai | sdk | pkg | other
 #       status    safe | review | -
 #       number    key shown on the tile (1-9) or -
+#       live      1 = still being scanned: size is an estimate, shown as "~5.1 GB"
 #
 #   Variables (-v): W H     map size in cells
 #                   mode    truecolor | 256 | plain
 #                   view    category | cleanup
+#                   msg     text for the empty placeholder map (no nodes yet)
 #
 #   Plain mode (no colour) prints a ranked list with ASCII bars instead.
 #   Plain POSIX awk only - runs on the awk that ships with macOS.
@@ -61,6 +63,7 @@ function fmt(kb) {
     if (kb >= 1024)      return sprintf("%.0f MB", kb / 1024)
     return sprintf("%d KB", kb)
 }
+function size_of(id) { return (LIVE[id] ? "~" : "") fmt(SZ[id]) }
 function max(a, b) { return a > b ? a : b }
 function min(a, b) { return a < b ? a : b }
 function rnd(v) { return int(v + 0.5) }
@@ -74,7 +77,7 @@ function key_of(id) {
 {
     id = $2
     KIND[id] = $1; PAR[id] = $3; SZ[id] = $4 + 0; CAT[id] = $5
-    ST[id] = ($6 == "-" ? "" : $6); LBL[id] = $7; NUM[id] = ($8 == "-" ? "" : $8)
+    ST[id] = ($6 == "-" ? "" : $6); LBL[id] = $7; NUM[id] = ($8 == "-" ? "" : $8); LIVE[id] = ($9 == "1")
     if ($1 == 1) TOP[++NTOP] = id
     else         KID[$3, ++NKID[$3]] = id
     if (CAT[id] != "") SEEN[CAT[id]] = 1
@@ -156,7 +159,7 @@ function leaf(id, x0, y0, x1, y1, lvl,   k, w, h, nm, sz, tx) {
     if (w < 1 || h < 1) return
     k = key_of(id)
     fill(x0, y0, x1, y1, k, lvl, view == "category" && ST[id] == "safe")
-    nm = (NUM[id] != "" ? NUM[id] " " : "") LBL[id]; sz = fmt(SZ[id])
+    nm = (NUM[id] != "" ? NUM[id] " " : "") LBL[id]; sz = size_of(id)
     tx = (w >= 6) ? x0 + 1 : x0
     if (h >= 2) {
         text(tx, y0, x1, nm, k, lvl == 1)
@@ -175,7 +178,7 @@ function parent(id, x0, y0, x1, y1,   k, w, h, i, n, L, ax0, ay0, ax1, ay1, c, s
     if (n == 0 || w < 12 || h < 5) { leaf(id, x0, y0, x1, y1, 1); return }
     k = key_of(id)
     fill(x0, y0, x1 - 1, y1 - 1, k, 1, 0)
-    nm = (NUM[id] != "" ? NUM[id] " " : "") LBL[id]; sz = fmt(SZ[id])
+    nm = (NUM[id] != "" ? NUM[id] " " : "") LBL[id]; sz = size_of(id)
     text(x0 + 1, y0, x1 - 3 - length(sz), nm, k, 1)
     text(x1 - 2 - length(sz), y0, x1 - 1, sz, k, 0)
 
@@ -216,13 +219,36 @@ function plain(   i, id, bar, j, n, tot, cats) {
         n = tot > 0 ? int(SZ[id] * 24 / tot + 0.5) : 0
         bar = ""
         for (j = 0; j < 24; j++) bar = bar (j < n ? "#" : ".")
-        printf "  %2s %-30s %8s  [%s]  %s%s\n", NUM[id], substr(LBL[id], 1, 30), fmt(SZ[id]), bar, \
+        printf "  %2s %-30s %8s  [%s]  %s%s\n", NUM[id], substr(LBL[id], 1, 30), size_of(id), bar, \
             NAME[CAT[id]], (ST[id] == "" ? "" : "  (" ST[id] ")")
     }
 }
 
+# Empty dotted frame with a centred message, shown before the first results.
+function placeholder(   x, y, line, g, mid, m) {
+    g = mode == "truecolor" ? "38;2;110;110;120" : "38;5;242"
+    mid = int(H / 2); m = substr(msg, 1, W - 4)
+    for (y = 0; y < H; y++) {
+        if (y == 0 || y == H - 1) {
+            line = (y == 0) ? "┌" : "└"
+            for (x = 1; x < W - 1; x++) line = line "╌"
+            line = line ((y == 0) ? "┐" : "┘")
+        } else if (y == mid) {
+            line = "╎" sprintf("%*s%s%*s", int((W - 2 - length(m)) / 2), "", m, W - 2 - length(m) - int((W - 2 - length(m)) / 2), "") "╎"
+        } else {
+            line = "╎" sprintf("%*s", W - 2, "") "╎"
+        }
+        print "  " ESC "[" g "m" line ESC "[0m"
+    }
+    print ""
+    print ""
+}
+
 END {
-    if (NTOP == 0) { print "  (nothing to show - folder is empty or unreadable)"; exit }
+    if (NTOP == 0) {
+        if (msg != "" && mode != "plain") { placeholder(); exit }
+        print "  (nothing to show - folder is empty or unreadable)"; exit
+    }
     if (mode == "plain") { plain(); exit }
 
     for (y = 0; y < H; y++) for (x = 0; x < W; x++) { CH[y, x] = " "; CB[y, x] = ""; CF[y, x] = ""; CD[y, x] = 0 }
