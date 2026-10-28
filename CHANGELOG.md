@@ -20,6 +20,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   output is buffered and printed in the original order, so the screen and log read like a
   one-at-a-time run. Steps that ask a question or need `sudo` (Docker volumes, Time Machine, system
   caches) still run on their own. Ctrl-C stops every running section.
+- **Live view of what each parallel section is doing.** While sections run, a panel under the
+  finished output shows a progress bar and, for every running section, how long it has run, its
+  current step, the last line it logged and the command it is running right now (for example
+  `find ~/Library/Caches/Homebrew -mindepth 1 -delete`). On a short window each section gets one
+  line. The panel is removed once all sections finish; the log is unchanged.
 - The `run_timeout` fallback polls every 0.1 s instead of every second, so hundreds of quick deletes
   no longer take minutes.
 

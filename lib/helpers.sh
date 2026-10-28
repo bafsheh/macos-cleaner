@@ -114,14 +114,19 @@ run_timeout() {
 #   Jobs are subshells, so each writes its TOTAL_* counters to a file on exit
 #   and they are added up here. Background jobs ignore Ctrl+C, so the trap
 #   stops them all, then lets Ctrl+C do whatever it did before.
+#
+#   On a terminal, a live panel under the finished output shows every running
+#   job: its section, current step, last line logged and the command it is
+#   running right now (see _par_panel).
 # =============================================================================
 _PAR_DIR='' _PAR_OLD_INT='' _PAR_OLD_TERM=''
-_PAR_PIDS=()
+_PAR_PIDS=() _PAR_STARTS=()
+declare -i _PAR_PANEL_H=0   # lines the live panel last drew (0 = none on screen)
 
 run_parallel() {
-    local -a fns=("$@")
+    local -a fns=("$@") running
     local -i n=${#fns[@]} started=0 shown=0 finished i frame=0 t0
-    local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏' c v
+    local c v
     local -i tty=0; [[ -t 1 ]] && tty=1
 
     # mac_cleaner_ prefix: the temp sweep (TEMP_KEEP_RE) never touches it.
@@ -129,12 +134,12 @@ run_parallel() {
         for c in "${fns[@]}"; do "$c"; done    # no scratch space: run in order
         return 0
     }
-    _PAR_PIDS=()
+    _PAR_PIDS=() _PAR_STARTS=() _PAR_PANEL_H=0
     _PAR_OLD_INT=$(trap -p INT); _PAR_OLD_TERM=$(trap -p TERM)
     trap '_par_abort INT'  INT
     trap '_par_abort TERM' TERM
 
-    t0=$(date +%s)
+    t0=$SECONDS
     while (( shown < n )); do
         # ── fill free slots ─────────────────────────────────────────────────
         finished=0
@@ -148,7 +153,7 @@ run_parallel() {
 
         # ── print finished jobs from the front of the queue, in order ───────
         while (( shown < started )) && [[ -e $_PAR_DIR/$shown.done ]]; do
-            (( tty )) && { printf '\r'; tput el 2>/dev/null; }
+            (( tty )) && _par_panel_clear
             cat "$_PAR_DIR/$shown.out"
             cat "$_PAR_DIR/$shown.out" >> "$LOG_FILE"
             if [[ -f $_PAR_DIR/$shown.stats ]]; then
@@ -161,12 +166,15 @@ run_parallel() {
         (( shown < n )) || break
 
         if (( tty )); then
-            printf "\r  ${BCYN}%s${NC} ${DIM}running sections in parallel - %d/%d done (%ds)${NC}" \
-                "${spin:frame%10:1}" "$shown" "$n" "$(( $(date +%s) - t0 ))"
-            tput el 2>/dev/null
+            running=() finished=$shown
+            for (( i = shown; i < started; i++ )); do
+                if [[ -e $_PAR_DIR/$i.done ]]; then (( finished++ )); else running+=("$i"); fi
+            done
+            _par_panel "$frame" "$finished" "$n" "$(( SECONDS - t0 ))" \
+                ${running[@]+"${running[@]}"}
             (( frame++ ))
         fi
-        sleep 0.1
+        sleep 0.2
     done
 
     wait "${_PAR_PIDS[@]}" 2>/dev/null
@@ -174,10 +182,109 @@ run_parallel() {
     rm -rf "$_PAR_DIR"; _PAR_DIR=''
 }
 
+# =============================================================================
+# § _par_panel FRAME DONE TOTAL ELAPSED IDX...
+#
+#   Redraws the live panel in place: a progress header, then one block per
+#   running job IDX:
+#
+#     ● 7 · HOMEBREW  12s  ▸ [brew cleanup]      section, time, current step
+#       │ cmd     : brew cleanup --prune=all     last line it logged
+#       ⚙ ruby …/brew.rb cleanup --prune=all     command running right now
+#
+#   The step and log line come from the job's output buffer; the command is
+#   the deepest live child process of the job (shell subshells, exiting
+#   processes, the logger's tee and the run_timeout poll `sleep` are skipped).
+#   When the window is too short for three lines per job, each job gets one
+#   line: the command, else the step. Every line is cut to the window width
+#   so nothing wraps and the next redraw lands on the same rows.
+# =============================================================================
+_par_panel() {   # FRAME DONE TOTAL ELAPSED IDX...
+    local -i frame=$1 fin=$2 total=$3 secs=$4; shift 4
+    local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏' size buf title stp last now bar line
+    local -i cols=80 rows=24 w rest fill bw=20 i k=0 full=1
+    local -a files=() pids=() info=() cmds=()
+
+    size=$(stty size 2>/dev/null < /dev/tty) || size=''
+    [[ $size =~ ^([1-9][0-9]*)\ ([1-9][0-9]*)$ ]] && { rows=${BASH_REMATCH[1]}; cols=${BASH_REMATCH[2]}; }
+    (( w = cols - 8 ))
+    (( cols < 80 )) && bw=10
+    (( 1 + 3 * $# > rows - 4 )) && full=0
+
+    for i in "$@"; do files+=("$_PAR_DIR/$i.out"); pids+=("${_PAR_PIDS[i]}"); done
+
+    if (( $# > 0 )); then
+        # One record per job: title ␟ step ␟ last line (ANSI and $HOME stripped).
+        while IFS= read -r line; do info+=("$line"); done < <(awk -v home="$HOME" '
+            function clean(s) {
+                gsub(/\033\[[0-9;]*[A-Za-z]/, "", s); gsub(/[\r\t]/, " ", s)
+                gsub(home, "~", s); sub(/^ +/, "", s); sub(/ +$/, "", s); return s
+            }
+            { s = clean($0) }
+            s == "" || s ~ /^┗/ { next }
+            s ~ /^┏━━ / { if (!(FILENAME in T)) { sub(/^┏━━ /, "", s); T[FILENAME] = s }; next }
+            s ~ /^▸ / { sub(/^▸ /, "", s); S[FILENAME] = s; L[FILENAME] = ""; next }
+            { L[FILENAME] = s }
+            END { for (i = 1; i < ARGC; i++) { f = ARGV[i]; print T[f] "\037" S[f] "\037" L[f] } }
+        ' "${files[@]}")
+
+        # Deepest live descendant of each job pid, one line per job.
+        while IFS= read -r line; do cmds+=("$line"); done < <(ps -Ao pid=,ppid=,command= -ww 2>/dev/null |
+            awk -v roots="${pids[*]}" -v home="$HOME" '
+            BEGIN { n = split(roots, r, " "); for (i = 1; i <= n; i++) root[r[i]] = 1 }
+            { p = $1; par[p] = $2; $1 = $2 = ""; sub(/^ +/, ""); cmd[p] = $0 }
+            END {
+                for (p in par) {
+                    if (p in root || cmd[p] == cmd[r[1]] || cmd[p] ~ /^(\(|(\/bin\/)?sleep |tee -a )/) continue
+                    d = 0; q = p
+                    while ((q in par) && !(q in root) && d < 64) { q = par[q]; d++ }
+                    if ((q in root) && d > best[q]) { best[q] = d; c = cmd[p]; gsub(home, "~", c); bc[q] = c }
+                }
+                for (i = 1; i <= n; i++) print bc[r[i]]
+            }')
+    fi
+
+    (( fill = total > 0 ? fin * bw / total : 0 ))
+    bar=$(printf '%*s' "$fill" '' | tr ' ' '#')$(printf '%*s' $(( bw - fill )) '' | tr ' ' '.')
+    bar=${bar//#/█}; bar=${bar//./░}
+    buf=$(printf "  ${BCYN}%s${NC} ${BOLD}Parallel cleanup${NC}  ${TEAL}%s${NC}  %d/%d done · %d running · %ds" \
+        "${spin:frame%10:1}" "$bar" "$fin" "$total" "$#" "$secs")
+    buf+=$'\033[K\n'
+
+    for i in "$@"; do
+        IFS=$'\037' read -r title stp last <<< "${info[k]:-}"
+        now=${cmds[k]:-}; now=${now:0:w}
+        [[ -n $title ]] || title=${fns[i]:-job $i}   # run_parallel's list; nothing printed yet
+        (( secs = SECONDS - ${_PAR_STARTS[i]:-$SECONDS} ))
+        title=${title:0:w/2}
+        (( rest = w - ${#title} - 8, rest < 0 )) && rest=0
+        if (( full )); then
+            buf+="  ${BGRN}●${NC} ${BOLD}${title}${NC}  ${DIM}${secs}s${NC}  ${BCYN}▸${NC} ${stp:0:rest}"$'\033[K\n'
+            buf+="    ${GRY}│${NC} ${DIM}${last:0:w}${NC}"$'\033[K\n'
+            buf+="    ${YLW}⚙${NC} ${now:-${DIM}…${NC}}"$'\033[K\n'
+        else
+            now=${now:-$stp}
+            buf+="  ${BGRN}●${NC} ${BOLD}${title}${NC} ${DIM}${secs}s${NC} ${YLW}⚙${NC} ${now:0:rest}"$'\033[K\n'
+        fi
+        (( k++ ))
+    done
+
+    (( _PAR_PANEL_H > 0 )) && printf '\r\033[%dA' "$_PAR_PANEL_H"
+    printf '%s\033[J' "$buf"
+    (( _PAR_PANEL_H = 1 + (full ? 3 : 1) * $# ))
+}
+
+# Erases the live panel so finished output can print in its place.
+_par_panel_clear() {
+    (( _PAR_PANEL_H > 0 )) && printf '\r\033[%dA\033[J' "$_PAR_PANEL_H"
+    _PAR_PANEL_H=0
+}
+
 # Starts FUNC in the background. Writes PREFIX.out (all output), PREFIX.stats
 # (counters) and, last, PREFIX.done - even if FUNC fails.
 _par_start() {   # FUNC PREFIX
     local fn=$1 out=$2 c
+    _PAR_STARTS+=("$SECONDS")
     {
         (
             LOG_FILE=/dev/null    # run_parallel appends the buffer to the log
@@ -192,6 +299,7 @@ _par_start() {   # FUNC PREFIX
 
 _par_abort() {   # SIGNAL
     local pid old
+    _par_panel_clear
     for pid in ${_PAR_PIDS[@]+"${_PAR_PIDS[@]}"}; do _kill_tree "$pid"; done
     { wait ${_PAR_PIDS[@]+"${_PAR_PIDS[@]}"}; } 2>/dev/null   # no "Terminated" noise
     [[ -n $_PAR_DIR ]] && rm -rf "$_PAR_DIR"
