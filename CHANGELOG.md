@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Changed
+- **Disk map scans live and in parallel.** The map opens immediately (empty) and fills in once a
+  second while a pool of background `du` workers (`DM_JOBS`, default CPU count, max 8) measures
+  folders from a shared queue. Big folders (`~/Library`, `~/Desktop`, `~/Documents`, `~/Projects`, …)
+  are split into one job per sub-folder so many workers share them. Folders still being measured
+  show `~` estimates; the status line shows progress and the latest folder found. Recommendations
+  are measured in the background at the same time. `q` stops a scan early; quitting or Ctrl-C stops
+  every worker. On a 207 GB home folder: ~25 s instead of ~52 s, with identical sizes.
+
+### Fixed
+- The disk map was drawn 80 columns wide whatever the window size (`tput` inside a command
+  substitution with stderr silenced could not see the terminal). It now reads the size from the
+  terminal device.
+- Redraws no longer blank the screen first (no flicker), and line-wrap is off while the map is on
+  screen so an over-long line can't push the frame down.
+
+---
+
 ## [1.4.0] - 2026-10-28
 
 ### Added

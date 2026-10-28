@@ -194,8 +194,11 @@ menu, where you can run more or pick **Exit** to finish.
 
 ## 🗺️ Disk map
 
-Pick **Disk map** on the main menu to see where your space went. The first scan of
-your home folder takes about a minute.
+Pick **Disk map** on the main menu to see where your space went. The map opens
+straight away and fills in live: several scanners measure your folders at the same
+time, tiles appear as soon as each folder is found, and the bottom line shows the
+latest folder found. Sizes marked `~` are still being measured. Press `q` to stop a
+scan early. A full scan of a large home folder takes well under a minute.
 
 - **Colour tiles**, sized by space used: code projects, documents and media, iOS and
   Android SDKs, AI models, package caches, and everything else.
@@ -344,6 +347,7 @@ You can tweak behaviour with environment variables. No config file needed:
 | `PY_SCAN_ROOTS` | auto | Folders to scan for Python caches |
 | `JS_SCAN_ROOTS` | auto | Folders to scan for JavaScript caches (auto includes `~/Desktop`) |
 | `TEMP_AGE_DAYS` | `3` | Temp items untouched this many days are removed |
+| `DM_JOBS` | CPU count (max 8) | How many folders the disk map scans at the same time |
 | `SHUTDOWN_DELAY` | `15` | Seconds in the cancellable shutdown countdown |
 | `KILL_APPS_ASSUME_YES` | `0` | Set `1` to quit apps without confirmation |
 | `DOCKER_CLEAN_ASSUME_YES` | `0` | Set `1` to allow the Docker wipe without confirmation |
