@@ -81,10 +81,14 @@ run_timeout() {
     fi
 
     # ── pure-bash fallback ──────────────────────────────────────────────────
+    # Polls every 0.1s: a whole-second poll costs ≥1s per call, which turns
+    # hundreds of instant rm's (purge_stale) into minutes of silence.
     "$@" &
-    local -i child=$! waited=0
-    while (( waited < secs )); do
-        sleep 1; (( waited++ ))
+    local -i child=$! ticks=0
+    sleep 0.01
+    kill -0 "$child" 2>/dev/null || { wait "$child"; return $?; }
+    while (( ticks < secs * 10 )); do
+        sleep 0.1; (( ticks++ ))
         kill -0 "$child" 2>/dev/null || { wait "$child"; return $?; }
     done
     kill -TERM "$child" 2>/dev/null
@@ -92,6 +96,124 @@ run_timeout() {
     kill -KILL "$child" 2>/dev/null
     wait "$child" 2>/dev/null
     return 124
+}
+
+# =============================================================================
+# § run_parallel FUNC...
+#
+#   Runs each FUNC (a function taking no arguments) as a background job, at
+#   most CLEAN_JOBS at a time. Each job's output is buffered and printed in the
+#   order given, as soon as it and every job before it are done, so the screen
+#   and the log read like a one-at-a-time run - just sooner.
+#
+#   Rules for a FUNC:
+#     • no prompts - jobs read from /dev/null; ask before calling run_parallel
+#     • never touch a folder another FUNC in the same call touches: two
+#       deletes racing on one tree report errors and miscount freed space
+#
+#   Jobs are subshells, so each writes its TOTAL_* counters to a file on exit
+#   and they are added up here. Background jobs ignore Ctrl+C, so the trap
+#   stops them all, then lets Ctrl+C do whatever it did before.
+# =============================================================================
+_PAR_DIR='' _PAR_OLD_INT='' _PAR_OLD_TERM=''
+_PAR_PIDS=()
+
+run_parallel() {
+    local -a fns=("$@")
+    local -i n=${#fns[@]} started=0 shown=0 finished i frame=0 t0
+    local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏' c v
+    local -i tty=0; [[ -t 1 ]] && tty=1
+
+    # mac_cleaner_ prefix: the temp sweep (TEMP_KEEP_RE) never touches it.
+    _PAR_DIR=$(mktemp -d "${TMPDIR:-/tmp}/mac_cleaner_par.XXXXXX") || {
+        for c in "${fns[@]}"; do "$c"; done    # no scratch space: run in order
+        return 0
+    }
+    _PAR_PIDS=()
+    _PAR_OLD_INT=$(trap -p INT); _PAR_OLD_TERM=$(trap -p TERM)
+    trap '_par_abort INT'  INT
+    trap '_par_abort TERM' TERM
+
+    t0=$(date +%s)
+    while (( shown < n )); do
+        # ── fill free slots ─────────────────────────────────────────────────
+        finished=0
+        for (( i = shown; i < started; i++ )); do
+            [[ -e $_PAR_DIR/$i.done ]] && (( finished++ ))
+        done
+        while (( started - shown - finished < CLEAN_JOBS && started < n )); do
+            _par_start "${fns[started]}" "$_PAR_DIR/$started"
+            (( started++ ))
+        done
+
+        # ── print finished jobs from the front of the queue, in order ───────
+        while (( shown < started )) && [[ -e $_PAR_DIR/$shown.done ]]; do
+            (( tty )) && { printf '\r'; tput el 2>/dev/null; }
+            cat "$_PAR_DIR/$shown.out"
+            cat "$_PAR_DIR/$shown.out" >> "$LOG_FILE"
+            if [[ -f $_PAR_DIR/$shown.stats ]]; then
+                while read -r c v; do
+                    [[ $c == TOTAL_* ]] && (( $c += v ))
+                done < "$_PAR_DIR/$shown.stats"
+            fi
+            (( shown++ ))
+        done
+        (( shown < n )) || break
+
+        if (( tty )); then
+            printf "\r  ${BCYN}%s${NC} ${DIM}running sections in parallel - %d/%d done (%ds)${NC}" \
+                "${spin:frame%10:1}" "$shown" "$n" "$(( $(date +%s) - t0 ))"
+            tput el 2>/dev/null
+            (( frame++ ))
+        fi
+        sleep 0.1
+    done
+
+    wait "${_PAR_PIDS[@]}" 2>/dev/null
+    eval "${_PAR_OLD_INT:-trap - INT}"; eval "${_PAR_OLD_TERM:-trap - TERM}"
+    rm -rf "$_PAR_DIR"; _PAR_DIR=''
+}
+
+# Starts FUNC in the background. Writes PREFIX.out (all output), PREFIX.stats
+# (counters) and, last, PREFIX.done - even if FUNC fails.
+_par_start() {   # FUNC PREFIX
+    local fn=$1 out=$2 c
+    {
+        (
+            LOG_FILE=/dev/null    # run_parallel appends the buffer to the log
+            for c in "${STAT_COUNTERS[@]}"; do printf -v "$c" 0; done
+            "$fn"
+            for c in "${STAT_COUNTERS[@]}"; do printf '%s %d\n' "$c" "${!c}"; done > "$out.stats"
+        ) > "$out.out" 2>&1 < /dev/null
+        : > "$out.done"
+    } &
+    _PAR_PIDS+=($!)
+}
+
+_par_abort() {   # SIGNAL
+    local pid old
+    for pid in ${_PAR_PIDS[@]+"${_PAR_PIDS[@]}"}; do _kill_tree "$pid"; done
+    { wait ${_PAR_PIDS[@]+"${_PAR_PIDS[@]}"}; } 2>/dev/null   # no "Terminated" noise
+    [[ -n $_PAR_DIR ]] && rm -rf "$_PAR_DIR"
+    printf '\n'
+    [[ $1 == INT ]] && old=$_PAR_OLD_INT || old=$_PAR_OLD_TERM
+    eval "${_PAR_OLD_INT:-trap - INT}"; eval "${_PAR_OLD_TERM:-trap - TERM}"
+    # Run the previous handler ourselves: bash 3.2 drops a signal re-sent from
+    # inside its own trap. `trap -p` prints: trap -- 'COMMAND' SIGNAL
+    if [[ -n $old ]]; then
+        eval "set -- ${old#trap }"
+        eval "$2"
+    else
+        kill -"$1" $$
+    fi
+}
+
+# Stops PID and everything it started (find, rm, brew …).
+_kill_tree() {   # PID
+    local kids c
+    kids=$(pgrep -P "$1" 2>/dev/null)
+    kill -TERM "$1" 2>/dev/null
+    for c in $kids; do _kill_tree "$c"; done
 }
 
 # =============================================================================
@@ -728,20 +850,21 @@ _scan_and_delete() {
                -o -path '*/.tox' \) -prune -o \
             "${preds[@]}" -print 2>/dev/null
     ) > "$hit_list" &
-    local -i fpid=$! waited=0 scan_ok=1
+    local -i fpid=$! waited=0 scan_ok=1 tty=0
+    [[ -t 1 ]] && tty=1    # live counters only on a terminal, not in a job's buffer
 
     while kill -0 "$fpid" 2>/dev/null; do
         sleep 2; (( waited += 2 ))
         local -i cur; cur=$(wc -l < "$hit_list" 2>/dev/null | tr -d ' ')
-        printf "${DIM}    …%ds  %d found${NC}\r" "$waited" "${cur:-0}"
+        (( tty )) && printf "${DIM}    …%ds  %d found${NC}\r" "$waited" "${cur:-0}"
         if (( waited >= SCAN_TIMEOUT )); then
             kill "$fpid" 2>/dev/null; wait "$fpid" 2>/dev/null
-            printf '\n'
+            (( tty )) && printf '\n'
             warn "scan timed out (${SCAN_TIMEOUT}s) - set ${envvar}= for a narrower scope"
             scan_ok=0; break
         fi
     done
-    wait "$fpid" 2>/dev/null; printf '\n'
+    wait "$fpid" 2>/dev/null; (( tty )) && printf '\n'
 
     local -i found=0 deleted=0
     found=$(wc -l < "$hit_list" | tr -d ' ')
@@ -751,11 +874,11 @@ _scan_and_delete() {
         local entry
         while IFS= read -r entry; do
             rm -rf "$entry" 2>/dev/null && (( deleted++ )) || true
-            if (( deleted % 25 == 0 && deleted > 0 )); then
+            if (( tty && deleted % 25 == 0 && deleted > 0 )); then
                 printf "${DIM}    deleted %d / %d${NC}\r" "$deleted" "$found"
             fi
         done < "$hit_list"
-        printf '\n'
+        (( tty )) && printf '\n'
         (( TOTAL_CLEANED++ ))
         ok "deleted ${deleted}/${found} entries ← $label"
     else

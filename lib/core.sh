@@ -38,11 +38,21 @@ declare -i TOTAL_FAILED=0
 declare -i TOTAL_TIMEDOUT=0
 declare -i TOTAL_TCC_BLOCKED=0   # folders macOS privacy (TCC) refused to list
 declare -r START_TIME=$(date +%s)
+# Every counter above - run_parallel carries these back from its jobs.
+declare -ra STAT_COUNTERS=(
+    TOTAL_FREED_KB TOTAL_CLEANED TOTAL_SKIPPED_MISSING TOTAL_SKIPPED_PROTECTED
+    TOTAL_FAILED TOTAL_TIMEDOUT TOTAL_TCC_BLOCKED
+)
 
 # ── tunable timeouts (seconds - override via environment) ────────────────────
 declare -i CMD_TIMEOUT=${CMD_TIMEOUT:-60}
 declare -i DIR_TIMEOUT=${DIR_TIMEOUT:-120}
 declare -i SCAN_TIMEOUT=${SCAN_TIMEOUT:-60}
+
+# ── cleanup sections run side by side (run_parallel) - sanitised like below ──
+[[ ${CLEAN_JOBS:-4} =~ ^[0-9]+$ ]] || CLEAN_JOBS=4
+declare -i CLEAN_JOBS=${CLEAN_JOBS:-4}
+(( CLEAN_JOBS < 1 )) && CLEAN_JOBS=1
 
 # ── temp-file age threshold (days) - sanitised: `declare -i` on junk aborts ──
 [[ ${TEMP_AGE_DAYS:-3} =~ ^[0-9]+$ ]] || TEMP_AGE_DAYS=3

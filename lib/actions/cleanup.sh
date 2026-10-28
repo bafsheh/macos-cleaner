@@ -12,16 +12,10 @@
 # =============================================================================
 
 # =============================================================================
-# § run_clean
-#
-#   Full cleanup flow - all 32 sections.
-#   Called from show_main_menu when the user selects option 1.
-# =============================================================================
-run_clean() {
-
-# =============================================================================
 # § STARTUP BANNER
 # =============================================================================
+_clean_banner() {
+
 echo
 say "macOS cleaner starting…"
 info "user      : $USER"
@@ -30,30 +24,40 @@ info "date      : $(date '+%Y-%m-%d %H:%M:%S %Z')"
 info "bash      : $BASH_VERSION"
 info "log       : $LOG_FILE"
 info "timeouts  : cmd=${CMD_TIMEOUT}s  dir=${DIR_TIMEOUT}s  scan=${SCAN_TIMEOUT}s"
+info "jobs      : ${CLEAN_JOBS} sections at a time"
 [[ -n $_TIMEOUT_BIN ]] && info "timeout bin: $_TIMEOUT_BIN" \
                        || info "timeout bin: pure-bash fallback"
 say "Disk before: $(disk_free)"
+}
 
 # =============================================================================
 # § 0 · PRE-RUN DISK USAGE REPORT  (informational - nothing deleted)
 # =============================================================================
+_clean_s0() {
+
 section "0 · PRE-RUN DISK USAGE REPORT"
 
 say "Largest directories before cleanup (use these to guide manual cleanup)"
 report_largest_dirs "$HOME"            "Home directory (~)"            1 30
 report_largest_dirs "$HOME/Library"    "~/Library subdirectories"      1 20
+}
 
 # =============================================================================
 # § 1 · TRASH
 # =============================================================================
+_clean_s1() {
+
 section "1 · TRASH"
 
 say "Emptying Trash"
 empty_trash
+}
 
 # =============================================================================
 # § 2 · USER CACHES & LOGS
 # =============================================================================
+_clean_s2() {
+
 section "2 · USER CACHES & LOGS"
 
 say "User Library caches and logs"
@@ -63,10 +67,13 @@ sweep_caches "User Library Caches" "$HOME/Library/Caches" "$HOME/Library/Caches/
 clean_dir "$HOME/Library/Logs"                                "User Logs"
 clean_dir "$HOME/Library/Application Support/CrashReporter"  "User Crash Reports"
 clean_dir "$HOME/Library/Saved Application State"             "Saved Application State"
+}
 
 # =============================================================================
 # § 3 · BROWSER CACHES
 # =============================================================================
+_clean_s3() {
+
 section "3 · BROWSER CACHES"
 
 say "Browser caches (Safari, Chrome, Firefox, Brave, Arc, Edge) + Electron apps"
@@ -92,10 +99,13 @@ clean_dir "$HOME/Library/Caches/Arc"                         "Arc cache"
 # Every Chromium / Electron profile (all browser profiles, not just Default,
 # plus Slack · Discord · Notion · Figma · Teams · Postman · VS Code & forks …)
 sweep_chromium_caches "Chromium & Electron app caches (all profiles)" "$HOME/Library/Application Support"
+}
 
 # =============================================================================
 # § 4 · XCODE & APPLE DEVELOPER TOOLS
 # =============================================================================
+_clean_s4() {
+
 section "4 · XCODE & APPLE DEVELOPER TOOLS"
 
 say "Xcode derived data, archives, and simulator caches"
@@ -112,10 +122,13 @@ clean_dir "$HOME/Library/Developer/CoreSimulator/Caches"       "iOS Simulator ca
 if xcrun --find simctl &>/dev/null; then
     run_step "Delete unavailable simulators"  "xcrun simctl delete unavailable"
 fi
+}
 
 # =============================================================================
 # § 5 · SWIFT PACKAGE MANAGER · COCOAPODS · CARTHAGE · MINT
 # =============================================================================
+_clean_s5() {
+
 section "5 · SWIFT PACKAGE MANAGER · COCOAPODS · CARTHAGE · MINT"
 
 say "Apple/Swift ecosystem package managers"
@@ -135,10 +148,13 @@ clean_dir "$HOME/Library/Caches/org.carthage.CarthageKit"     "Carthage cache"
 
 # Mint (Swift CLI package manager)
 clean_dir "$HOME/.mint"                                        "Mint packages"
+}
 
 # =============================================================================
 # § 6 · HOMEBREW
 # =============================================================================
+_clean_s6() {
+
 section "6 · HOMEBREW"
 
 say "Homebrew orphan deps, stale formulae, cache, and logs"
@@ -153,11 +169,14 @@ if command -v brew &>/dev/null; then
 else
     skip_missing "Homebrew"
 fi
+}
 
 # =============================================================================
 # § 7 · JAVASCRIPT / NODE.JS PACKAGE MANAGERS
 #   npm · yarn · pnpm · bun · deno · volta · nvm · fnm · turbo
 # =============================================================================
+_clean_s7() {
+
 section "7 · JAVASCRIPT / NODE.JS PACKAGE MANAGERS"
 
 say "JS/Node package manager caches and stores"
@@ -193,11 +212,14 @@ clean_dir "$HOME/Library/Caches/ms-playwright" "Playwright browsers (Library)"
 clean_dir "$HOME/.cache/puppeteer"           "Puppeteer Chrome downloads"
 clean_dir "$HOME/.cache/chrome-devtools-mcp" "Chrome for Testing (chrome-devtools-mcp)"
 clean_dir "$HOME/.cache/selenium"            "Selenium driver cache"
+}
 
 # =============================================================================
 # § 8 · JAVASCRIPT / NODE.JS PROJECT-LEVEL CACHES
 #   .next/cache · .turbo · .parcel-cache · jest · eslintcache · tsbuildinfo
 # =============================================================================
+_clean_s8() {
+
 section "8 · JAVASCRIPT / NODE.JS PROJECT-LEVEL CACHES"
 
 say "Scanning project directories for JS build artefact caches"
@@ -222,11 +244,14 @@ _scan_and_delete \
         -o -name ".stylelintcache" \
         -o -name "*.tsbuildinfo"   \
     \) \)
+}
 
 # =============================================================================
 # § 9 · PYTHON PACKAGE MANAGERS
 #   pip · uv · poetry · pipenv · hatch · pdm · pyenv · conda / mamba
 # =============================================================================
+_clean_s9() {
+
 section "9 · PYTHON PACKAGE MANAGERS"
 
 say "Python tooling caches"
@@ -277,11 +302,14 @@ clean_dir "$HOME/miniforge3/pkgs"          "Miniforge3 pkgs"
 clean_dir "$HOME/mambaforge/pkgs"          "Mambaforge pkgs"
 clean_dir "$HOME/opt/anaconda3/pkgs"       "Anaconda3 pkgs (opt)"
 clean_dir "$HOME/opt/miniconda3/pkgs"      "Miniconda3 pkgs (opt)"
+}
 
 # =============================================================================
 # § 10 · PYTHON PROJECT-LEVEL CACHES
 #   __pycache__ · .pytest_cache · .mypy_cache · .ruff_cache
 # =============================================================================
+_clean_s10() {
+
 section "10 · PYTHON PROJECT-LEVEL CACHES"
 
 say "Scanning project directories for Python bytecode and tool caches"
@@ -296,10 +324,13 @@ _scan_and_delete \
         -o -name ".mypy_cache"   \
         -o -name ".ruff_cache"   \
     \) \)
+}
 
 # =============================================================================
 # § 11 · GO
 # =============================================================================
+_clean_s11() {
+
 section "11 · GO"
 
 say "Go build, module, test, and fuzz caches"
@@ -314,10 +345,13 @@ fi
 # macOS stores the Go build cache under Library/Caches; also clean directly
 clean_dir "$HOME/Library/Caches/go-build"  "Go build cache (Library/Caches)"
 clean_dir "$HOME/go/pkg/mod/cache"          "Go module download cache"
+}
 
 # =============================================================================
 # § 12 · RUST  (cargo · rustup · sccache)
 # =============================================================================
+_clean_s12() {
+
 section "12 · RUST"
 
 say "Cargo registry, git, rustup, and sccache"
@@ -332,10 +366,13 @@ fi
 clean_dir "$HOME/.rustup/tmp"                 "rustup temp downloads"
 clean_dir "$HOME/.cache/sccache"              "sccache (~/.cache)"
 clean_dir "$HOME/Library/Caches/Mozilla.sccache" "sccache (Library/Caches)"
+}
 
 # =============================================================================
 # § 13 · C / C++  (ccache · Conan v1/v2 · vcpkg)
 # =============================================================================
+_clean_s13() {
+
 section "13 · C / C++"
 
 say "ccache, Conan, and vcpkg caches"
@@ -359,10 +396,13 @@ clean_dir "$HOME/.conan2/tmp"               "Conan v2 tmp"
 clean_dir "$HOME/.vcpkg/downloads"          "vcpkg downloads"
 clean_dir "$HOME/.vcpkg/buildtrees"         "vcpkg buildtrees"
 clean_dir "$HOME/.vcpkg/packages"           "vcpkg staged packages"
+}
 
 # =============================================================================
 # § 14 · RUBY  (gem · bundler)
 # =============================================================================
+_clean_s14() {
+
 section "14 · RUBY"
 
 say "RubyGems and Bundler caches"
@@ -370,10 +410,13 @@ if command -v gem &>/dev/null; then
     run_step "gem cleanup"  "gem cleanup"
 fi
 clean_dir "$HOME/.bundle/cache"             "Bundler cache"
+}
 
 # =============================================================================
 # § 15 · PHP  (Composer · PHP-CS-Fixer · PHPStan · Psalm)
 # =============================================================================
+_clean_s15() {
+
 section "15 · PHP"
 
 say "PHP package manager and static-analysis caches"
@@ -392,10 +435,13 @@ clean_dir "$HOME/.cache/psalm"               "Psalm result cache"
 if command -v php-cs-fixer &>/dev/null; then
     run_step "PHP-CS-Fixer cache clear"  "php-cs-fixer clear-cache"
 fi
+}
 
 # =============================================================================
 # § 16 · .NET  (NuGet)
 # =============================================================================
+_clean_s16() {
+
 section "16 · .NET"
 
 say ".NET NuGet local caches"
@@ -404,10 +450,13 @@ if command -v dotnet &>/dev/null; then
 else
     skip_missing "dotnet"
 fi
+}
 
 # =============================================================================
 # § 17 · JAVA · JVM · KOTLIN · SPRING  (Maven · Gradle · SBT · Ivy · SDKMAN)
 # =============================================================================
+_clean_s17() {
+
 section "17 · JAVA · JVM · KOTLIN · SPRING"
 
 say "Maven, Gradle, SBT, Ivy2, Kotlin, Spring, and SDKMAN caches"
@@ -439,19 +488,25 @@ if [[ -d $HOME/.sdkman ]]; then
     clean_dir "$HOME/.sdkman/tmp"            "SDKMAN tmp"
     clean_dir "$HOME/.sdkman/archives"       "SDKMAN archives"
 fi
+}
 
 # =============================================================================
 # § 18 · ANDROID  (SDK cache · build cache)
 # =============================================================================
+_clean_s18() {
+
 section "18 · ANDROID"
 
 say "Android SDK and incremental build caches"
 clean_dir "$HOME/.android/cache"             "Android SDK cache"
 clean_dir "$HOME/.android/build-cache"       "Android incremental build cache"
+}
 
 # =============================================================================
 # § 19 · DOCKER
 # =============================================================================
+_clean_s19() {
+
 section "19 · DOCKER"
 
 say "Docker build, layer, and image caches"
@@ -461,36 +516,27 @@ if command -v docker &>/dev/null; then
         run_step "docker system prune -a"   "docker system prune -af"
         run_step "docker buildx prune"      "docker buildx prune -f"
 
-        # --volumes removes unnamed volumes - opt-in only because named volumes may
-        # hold database data (postgres, mysql, redis) that the user wants to keep.
+        # Answer collected up front by _clean_docker_ask (jobs can't prompt).
         step "[Docker volume prune  (opt-in)]"
-        info "cmd     : docker volume prune -f"
-        info "WARNING : This removes ALL unnamed Docker volumes."
-        info "          Named volumes (databases, persistent data) are NOT affected."
-        if [[ -t 0 ]]; then   # only prompt when stdin is a terminal
-            printf '    Prune unnamed Docker volumes? [y/N] '
-            read -r _docker_vol_ans
-            if [[ $_docker_vol_ans == [yY] ]]; then
-                run_step "docker volume prune" "docker volume prune -f"
-            else
-                info "status  : skipped by user"
-                echo
-            fi
-        else
-            info "status  : non-interactive - skipped (run manually: docker volume prune -f)"
-            echo
-        fi
+        case $_DOCKER_VOL_ANS in
+            yes) run_step "docker volume prune" "docker volume prune -f" ;;
+            no)  info "status  : skipped by user"; echo ;;
+            *)   info "status  : non-interactive - skipped (run manually: docker volume prune -f)"; echo ;;
+        esac
     else
         step "[Docker]"; info "status  : daemon not running - skipping"; echo
     fi
 else
     skip_missing "Docker"
 fi
+}
 
 # =============================================================================
 # § 20 · INFRA / CLOUD / DEVOPS
 #   Terraform · Pulumi · Ansible · kubectl · minikube · AWS · GCP · Azure · Vagrant
 # =============================================================================
+_clean_s20() {
+
 section "20 · INFRA / CLOUD / DEVOPS"
 
 say "Infrastructure tooling caches and logs"
@@ -505,22 +551,28 @@ clean_dir "$HOME/.aws/cli/cache"              "AWS CLI cache"
 clean_dir "$HOME/.config/gcloud/logs"         "gcloud logs"
 clean_dir "$HOME/.azure/logs"                 "Azure CLI logs"
 clean_dir "$HOME/.vagrant.d/tmp"              "Vagrant tmp"
+}
 
 # =============================================================================
 # § 21 · LOCAL DATABASE DEV  (Postgres.app · DBngin · Redis)
 #   Logs only - data directories are never touched.
 # =============================================================================
+_clean_s21() {
+
 section "21 · LOCAL DATABASE DEV"
 
 say "Database app logs (data directories skipped)"
 clean_dir "$HOME/Library/Application Support/Postgres/var-*/log"  "Postgres.app logs"
 clean_dir "$HOME/.dbngin/logs"                                     "DBngin logs"
 clean_dir "$HOME/Library/Logs/redis"                               "Redis logs"
+}
 
 # =============================================================================
 # § 22 · CODE EDITORS & IDEs
 #   VS Code · Cursor · Windsurf · JetBrains · Sublime · Zed · Nova · Atom
 # =============================================================================
+_clean_s22() {
+
 section "22 · CODE EDITORS & IDEs"
 
 say "IDE and editor caches, compiled extension data, and logs"
@@ -570,6 +622,7 @@ clean_dir "$HOME/Library/Caches/com.github.atom"                          "Atom 
 clean_dir "$HOME/Library/Caches/com.panic.Nova"                           "Nova cache"
 clean_dir "$HOME/Library/Caches/dev.zed.Zed"                              "Zed cache"
 clean_dir "$HOME/Library/Logs/Zed"                                        "Zed logs"
+}
 
 # =============================================================================
 # § 23 · AI ASSISTANTS & LLM TOOLS
@@ -577,6 +630,8 @@ clean_dir "$HOME/Library/Logs/Zed"                                        "Zed l
 #   Tabnine · Amazon Q · Sourcegraph Cody · Gemini · Warp · Mistral · Groq
 #   GitHub Copilot · Raycast · llm CLI
 # =============================================================================
+_clean_s23() {
+
 section "23 · AI ASSISTANTS & LLM TOOLS"
 
 say "AI assistant app caches, GPU caches, and logs"
@@ -685,14 +740,18 @@ clean_dir "$HOME/Library/Caches/com.raycast.macos"                        "Rayca
 # llama.cpp has no persistent global cache; llm CLI stores logs here:
 clean_dir "$HOME/Library/Application Support/io.datasette.llm/logs"       "llm CLI logs"
 clean_dir "$HOME/.config/llm"                                              "llm CLI config cache"
+}
 
 # =============================================================================
 # § 24 · MAIL & MESSAGES
 # =============================================================================
+_clean_s24() {
+
 section "24 · MAIL & MESSAGES"
 
 say "Mail download caches"
 clean_dir "$HOME/Library/Containers/com.apple.mail/Data/Library/Caches"  "Mail caches"
+}
 
 # =============================================================================
 # § 25 · MICROSOFT OFFICE, TEAMS & OUTLOOK
@@ -703,6 +762,8 @@ clean_dir "$HOME/Library/Containers/com.apple.mail/Data/Library/Caches"  "Mail c
 #   Outlook's local mail database, account state, and signatures all live
 #   OUTSIDE the Caches folder, so they are left untouched.
 # =============================================================================
+_clean_s25() {
+
 section "25 · MICROSOFT OFFICE, TEAMS & OUTLOOK"
 
 say "Microsoft app caches (documents, accounts, and mail are preserved)"
@@ -744,6 +805,7 @@ clean_dir "$HOME/Library/Application Support/Microsoft Edge/Default/Cache"      
 clean_dir "$HOME/Library/Application Support/Microsoft Edge/Default/Code Cache"                   "Edge Default Code Cache"
 clean_dir "$HOME/Library/Application Support/Microsoft Edge/Default/GPUCache"                     "Edge Default GPUCache"
 clean_dir "$HOME/Library/Application Support/Microsoft Edge/Default/Service Worker/CacheStorage"  "Edge Service Worker cache"
+}
 
 # =============================================================================
 # § 26 · ADOBE CREATIVE CLOUD
@@ -754,6 +816,8 @@ clean_dir "$HOME/Library/Application Support/Microsoft Edge/Default/Service Work
 #   per-app caches/logs are cleared. These regenerate from your source media on
 #   next launch. Project files, libraries, presets, and settings are NOT touched.
 # =============================================================================
+_clean_s26() {
+
 section "26 · ADOBE CREATIVE CLOUD"
 
 say "Adobe shared media caches, app caches, and logs (projects & presets preserved)"
@@ -776,6 +840,7 @@ clean_dir "$HOME/Library/Caches/CSXS"                                         "A
 # ── logs ─────────────────────────────────────────────────────────────────────
 clean_dir "$HOME/Library/Logs/Adobe"                                          "Adobe logs"
 clean_dir "$HOME/Library/Logs/CreativeCloud"                                  "Creative Cloud logs"
+}
 
 # =============================================================================
 # § 27 · PHOTOS  (caches only - your library is never touched)
@@ -785,6 +850,8 @@ clean_dir "$HOME/Library/Logs/CreativeCloud"                                  "C
 #   albums, faces) is irreplaceable user data: it is NEVER modified, because
 #   deleting files inside it can corrupt the library and force a full rebuild.
 # =============================================================================
+_clean_s27() {
+
 section "27 · PHOTOS (caches only)"
 
 say "Photos app caches (your photo library is never touched)"
@@ -801,6 +868,7 @@ if [[ -n "$(find "$HOME/Pictures" -maxdepth 1 -name '*.photoslibrary' -print -qu
     info "  reclaim space via Photos ▸ Recently Deleted, or System Settings ▸"
     info "  Apple Account ▸ iCloud ▸ Photos ▸ 'Optimise Mac Storage'."
 fi
+}
 
 # =============================================================================
 # § 28 · TIME MACHINE LOCAL SNAPSHOTS
@@ -809,24 +877,32 @@ fi
 #   even when the backup drive is disconnected.  They can accumulate to many
 #   GBs on laptops.  Deleting them is safe: your remote TM backup is untouched.
 # =============================================================================
+_clean_s28() {
+
 section "28 · TIME MACHINE LOCAL SNAPSHOTS"
 
 say "Listing and deleting Time Machine local (on-disk) snapshots"
 clean_tm_snapshots
+}
 
 # =============================================================================
 # § 29 · QUICK LOOK & iOS DEVICE UPDATES
 # =============================================================================
+_clean_s29() {
+
 section "29 · QUICK LOOK & iOS DEVICE UPDATES"
 
 say "Quick Look thumbnail cache and old iOS update files"
 run_step "Quick Look cache regenerate"  "qlmanage -r cache"
 clean_dir "$HOME/Library/iTunes/iPhone Software Updates"  "Old iOS update files"
 clean_dir "$HOME/Library/iTunes/iPad Software Updates"    "Old iPadOS update files"
+}
 
 # =============================================================================
 # § 30 · SYSTEM CACHES & LOGS  (requires sudo)
 # =============================================================================
+_clean_s30() {
+
 section "30 · SYSTEM CACHES & LOGS (sudo)"
 
 say "System-level caches, ASL logs, and rotated logs"
@@ -863,14 +939,18 @@ else
     warn "Skipped system-level cleanup (no sudo access)."
     echo
 fi
+}
 
 # =============================================================================
 # § 31 · TEMPORARY FILES  (untouched for TEMP_AGE_DAYS days, default 3)
 # =============================================================================
+_clean_s31() {
+
 section "31 · TEMPORARY FILES"
 
 say "Removing temp items untouched for ${TEMP_AGE_DAYS}+ days (in-use items are kept)"
 temp_purge_all
+}
 
 # =============================================================================
 # § 32 · SYSTEM DATA  (app cache sweep · diagnostics · informational)
@@ -889,6 +969,8 @@ temp_purge_all
 #   (com.apple.bird) can stage un-uploaded user data there. We sweep only the
 #   per-app sandbox cache subfolders, which regenerate cleanly.
 # =============================================================================
+_clean_s32() {
+
 section "32 · SYSTEM DATA (app caches · diagnostics)"
 
 say "Reclaiming regenerable app caches counted under \"System Data\""
@@ -916,10 +998,13 @@ if [[ -d $_ios_backup ]]; then
 fi
 info "Tip: in Disk Utility choose View ▸ Show APFS Snapshots to see snapshot and"
 info "     purgeable space - the most accurate view of reclaimable System Data."
+}
 
 # =============================================================================
 # § SUMMARY
 # =============================================================================
+_clean_summary() {
+
 section "SUMMARY"
 
 declare -i END_TIME ELAPSED
@@ -948,5 +1033,64 @@ ok   "Cleanup complete."
 echo
 printf 'Tip: restart your Mac to release caches still held by running processes.\n'
 printf 'Note: apps rebuild their caches on next launch - first start may be slightly slower.\n'
+}
 
-}   # end run_clean
+# =============================================================================
+# § _clean_docker_ask
+#
+#   Asks the §19 volume-prune question before the parallel phase starts:
+#   background jobs read from /dev/null, so they cannot prompt. --volumes
+#   removes unnamed volumes - opt-in only because named volumes may hold
+#   database data (postgres, mysql, redis) that the user wants to keep.
+#   Sets _DOCKER_VOL_ANS to yes / no / skip.
+# =============================================================================
+_DOCKER_VOL_ANS=skip
+_clean_docker_ask() {
+    _DOCKER_VOL_ANS=skip
+    [[ -t 0 ]] || return 0   # only prompt when stdin is a terminal
+    command -v docker &>/dev/null && docker info &>/dev/null || return 0
+
+    step "[Docker volume prune  (opt-in)]"
+    info "cmd     : docker volume prune -f"
+    info "WARNING : This removes ALL unnamed Docker volumes."
+    info "          Named volumes (databases, persistent data) are NOT affected."
+    printf '    Prune unnamed Docker volumes? [y/N] '
+    local ans; read -r ans
+    [[ $ans == [yY] ]] && _DOCKER_VOL_ANS=yes || _DOCKER_VOL_ANS=no
+    echo
+}
+
+# =============================================================================
+# § run_clean
+#
+#   Full cleanup flow - all 32 sections, in three phases:
+#     1. in order: banner, disk report, Trash (§1) and the broad sweeps of
+#        ~/Library/Caches, ~/Library/Logs and every Chromium/Electron profile
+#        (§2-§3). Many later sections clear a sub-folder of these, so they
+#        finish first: two deletes racing on one folder report errors.
+#     2. in parallel, CLEAN_JOBS at a time: the per-tool sections §4-§27 and
+#        §29, which never share a folder. Output still prints in order.
+#     3. in order: §28 and §30 (may ask for your password), then §31 + §32
+#        side by side, then the summary.
+#   Called from show_main_menu when the user selects option 1.
+# =============================================================================
+run_clean() {
+    _clean_banner
+    _clean_s0
+    _clean_s1
+    _clean_s2
+    _clean_s3
+
+    _clean_docker_ask
+    run_parallel _clean_s4  _clean_s5  _clean_s6  _clean_s7  _clean_s8  _clean_s9 \
+                 _clean_s10 _clean_s11 _clean_s12 _clean_s13 _clean_s14 _clean_s15 \
+                 _clean_s16 _clean_s17 _clean_s18 _clean_s19 _clean_s20 _clean_s21 \
+                 _clean_s22 _clean_s23 _clean_s24 _clean_s25 _clean_s26 _clean_s27 \
+                 _clean_s29
+
+    _clean_s28
+    _clean_s30
+    run_parallel _clean_s31 _clean_s32
+
+    _clean_summary
+}

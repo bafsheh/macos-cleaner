@@ -16,6 +16,7 @@
 # │    CMD_TIMEOUT=60    per-command timeout in seconds     (default 60)          │
 # │    DIR_TIMEOUT=120   per-directory delete timeout       (default 120)         │
 # │    SCAN_TIMEOUT=60   project-scan find timeout          (default 60)          │
+# │    CLEAN_JOBS=4      cleanup sections run in parallel   (1 = one at a time)   │
 # │    PY_SCAN_ROOTS     space-separated roots for Python project scan            │
 # │    JS_SCAN_ROOTS     space-separated roots for JS project scan                │
 # │    SHUTDOWN_DELAY=15 cancellable shutdown countdown, seconds   (default 15)   │
