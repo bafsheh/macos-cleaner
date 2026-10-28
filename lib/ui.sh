@@ -139,6 +139,8 @@ interactive_menu() {
 #                        row that acts as "Back": activating it (Enter or space
 #                        while highlighted) exits with MULTISELECT_BACK=1. -1 to
 #                        disable. Default -1.
+#     MS_PRESELECT       space-separated result indices (same numbering as
+#                        MULTISELECT_RESULT) that start out ticked. Default none.
 #
 #   Keys: ↑ ↓ navigate · space toggle · a toggle-all · Enter confirm · q cancel
 #
@@ -162,8 +164,10 @@ interactive_multiselect() {
     # ── absorb optional input globals, then reset so they never leak ──────────
     local -i tail=${MS_TAIL_CONTROLS:-0}
     local -i back_row=${MS_BACK_ROW:--1}
+    local preselect=${MS_PRESELECT:-}
     MS_TAIL_CONTROLS=0
     MS_BACK_ROW=-1
+    MS_PRESELECT=''
 
     # last index that "Select all" governs (action rows are 1..last_action)
     local -i last_action=$(( n - 1 - tail ))
@@ -185,6 +189,12 @@ interactive_multiselect() {
         SELECTED[0]=$state
         for (( j=1; j<=last_action; j++ )); do SELECTED[j]=$state; done
     }
+
+    local p
+    for p in $preselect; do
+        [[ $p =~ ^[0-9]+$ ]] && (( p + 1 < n )) && SELECTED[p+1]=1
+    done
+    [[ -n $preselect ]] && _ms_sync_all
 
     # ── non-interactive fallback ─────────────────────────────────────────────
     if [[ ! -t 0 || ! -t 1 ]]; then
