@@ -16,6 +16,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   are measured in the background at the same time. `q` stops a scan early; quitting or Ctrl-C stops
   every worker. On a 207 GB home folder: ~25 s instead of ~52 s, with identical sizes.
 
+- **Cleanup runs its independent sections in parallel** (`CLEAN_JOBS`, default 4). Each section's
+  output is buffered and printed in the original order, so the screen and log read like a
+  one-at-a-time run. Steps that ask a question or need `sudo` (Docker volumes, Time Machine, system
+  caches) still run on their own. Ctrl-C stops every running section.
+- The `run_timeout` fallback polls every 0.1 s instead of every second, so hundreds of quick deletes
+  no longer take minutes.
+
 ### Fixed
 - The disk map was drawn 80 columns wide whatever the window size (`tput` inside a command
   substitution with stderr silenced could not see the terminal). It now reads the size from the
