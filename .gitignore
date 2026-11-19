@@ -16,3 +16,17 @@ mac_cleaner_*.log
 CLAUDE.md
 .vscode/
 .idea/
+.cursorrules
+.cursorignore
+.cursorindexingignore
+.agents/
+.agent/
+skills-lock.json
+*.code-workspace
+.codex/
+.windsurf/
+.continue/
+.gemini/
+.copilot/
+.superpowers/
+.obsidian/
