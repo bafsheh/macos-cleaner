@@ -20,7 +20,7 @@
 #   ACTION_LABELS[i] is shown in the checkbox list AND in the queue banner.
 #   ACTION_FNS[i]    is the function invoked when that row is selected.
 #   Execution order is the array order (= the list order the user sees).
-declare -ra ACTION_KEYS=(clean trash temp mem dns ports apps docker ollama)
+declare -ra ACTION_KEYS=(clean trash temp mem dns ports apps worktrees docker colima ollama)
 declare -ra ACTION_LABELS=(
     "Clean up             (caches · logs · package stores · Microsoft · Trash)"
     "Empty Trash          (all volumes · works without Full Disk Access)"
@@ -29,10 +29,12 @@ declare -ra ACTION_LABELS=(
     "Flush DNS cache"
     "Free common dev ports"
     "Kill all open apps   (spares terminals · IDEs · Finder)"
+    "Stale git worktrees  (clean · pushed · idle 7+ days · branches kept)"
     "Docker - remove ALL containers & images      ⚠ destructive"
+    "Colima - delete VMs & their Docker data      ⚠ destructive"
     "Ollama / llama - remove ALL models & caches  ⚠ destructive"
 )
-declare -ra ACTION_FNS=(run_clean _trash_action clean_temp free_memory flush_dns free_ports kill_apps docker_clean ollama_clean)
+declare -ra ACTION_FNS=(run_clean _trash_action clean_temp free_memory flush_dns free_ports kill_apps worktree_clean docker_clean colima_clean ollama_clean)
 
 # Standalone "Empty Trash" row: empty_trash plus its own heading.
 _trash_action() {

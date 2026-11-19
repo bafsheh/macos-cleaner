@@ -22,11 +22,16 @@
 # │    SHUTDOWN_DELAY=15 cancellable shutdown countdown, seconds   (default 15)   │
 # │    TEMP_AGE_DAYS=3   temp items untouched this many days are removed (≥1)     │
 # │    DOCKER_TIMEOUT=300 per-command timeout for the Docker teardown             │
+# │    WORKTREE_SCAN_ROOTS  space-separated roots for the stale-worktree scan     │
+# │    WORKTREE_AGE_DAYS=7  worktrees untouched this many days are candidates     │
+# │    WORKTREE_KEEP_RE     regex of worktree paths never removed                 │
 # │    NO_COLOR          set to disable all colour output (CLICOLOR_FORCE=1 re-on)│
 # │                                                                               │
 # │  Non-interactive opt-ins (destructive actions skip their y/N prompt)          │
 # │    KILL_APPS_ASSUME_YES=1      quit apps without confirmation                  │
+# │    WORKTREE_CLEAN_ASSUME_YES=1 remove clean, pushed, idle git worktrees        │
 # │    DOCKER_CLEAN_ASSUME_YES=1   wipe containers+images (DOCKER_CLEAN_VOLUMES=1) │
+# │    COLIMA_CLEAN_ASSUME_YES=1   delete all Colima VMs and their data disks      │
 # │    OLLAMA_CLEAN_ASSUME_YES=1   wipe all Ollama/llama model weights             │
 # │    SHUTDOWN_ASSUME_YES=1       allow shutdown on non-TTY stdin (no cancel key) │
 # │                                                                               │
@@ -69,7 +74,9 @@ source "$LIB_DIR/actions/free_memory.sh"
 source "$LIB_DIR/actions/flush_dns.sh"
 source "$LIB_DIR/actions/free_ports.sh"
 source "$LIB_DIR/actions/kill_apps.sh"
+source "$LIB_DIR/actions/worktree_clean.sh"
 source "$LIB_DIR/actions/docker_clean.sh"
+source "$LIB_DIR/actions/colima_clean.sh"
 source "$LIB_DIR/actions/ollama_clean.sh"
 source "$LIB_DIR/actions/disk_map.sh"
 

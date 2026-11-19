@@ -473,6 +473,86 @@ skip_missing() {
 }
 
 # =============================================================================
+# § simctl_cmd
+#
+#   Prints a shell command prefix that runs simctl, or nothing if no Xcode is
+#   installed. xcode-select often points at the Command Line Tools, which ship
+#   no simctl, so fall back to an installed Xcode.app via DEVELOPER_DIR for
+#   this one command (the system setting is left alone).
+# =============================================================================
+simctl_cmd() {
+    if xcrun --find simctl &>/dev/null; then
+        printf '%s' "xcrun simctl"; return 0
+    fi
+    local xc
+    for xc in /Applications/Xcode.app /Applications/Xcode*.app; do
+        if [[ -x $xc/Contents/Developer/usr/bin/simctl ]]; then
+            printf "DEVELOPER_DIR='%s' xcrun simctl" "$xc/Contents/Developer"
+            return 0
+        fi
+    done
+}
+
+# =============================================================================
+# § skip_in_use LABEL REASON [TIP]
+#
+#   Prints a uniform "in use - skipped" notice and counts it as protected.
+#   Use when deleting now would break a running process.
+# =============================================================================
+skip_in_use() {
+    step "[$1]"
+    info "status  : skipped - $2"
+    [[ -n ${3:-} ]] && info "tip     : $3"
+    (( TOTAL_SKIPPED_PROTECTED++ ))
+    echo
+}
+
+# =============================================================================
+# § remove_files DIR GLOB LABEL
+#
+#   Deletes the regular files in DIR whose names match GLOB (no recursion,
+#   directories never touched). Logs count and size freed, like clean_dir.
+# =============================================================================
+remove_files() {
+    local dir="$1" glob="$2" label="$3"
+    step "[$label]"
+    info "path    : $dir/$glob"
+
+    local -a hits=()
+    local f
+    if [[ -d $dir ]]; then
+        for f in "$dir"/$glob; do [[ -f $f ]] && hits+=("$f"); done
+    fi
+    if (( ${#hits[@]} == 0 )); then
+        info "status  : not present - nothing to do"
+        (( TOTAL_SKIPPED_MISSING++ ))
+        echo
+        return 0
+    fi
+
+    local -i freed_kb=0 removed=0 kb
+    for f in "${hits[@]}"; do
+        kb=$(du -sk "$f" 2>/dev/null | awk '{print $1+0}')
+        if rm -f "$f" 2>/dev/null; then
+            (( freed_kb += kb )); (( removed++ ))
+            info "removed : ${f##*/}  ($(human_size "$kb"))"
+        else
+            warn "could not remove ${f##*/}"
+        fi
+    done
+
+    (( TOTAL_FREED_KB += freed_kb ))
+    if (( removed == ${#hits[@]} )); then
+        (( TOTAL_CLEANED++ ))
+        ok "freed $(human_size "$freed_kb") (${removed} files) ← $label"
+    else
+        (( TOTAL_FAILED++ ))
+        warn "removed ${removed}/${#hits[@]} files ← $label"
+    fi
+    echo
+}
+
+# =============================================================================
 # § sweep_caches LABEL BASE PATH_PATTERN
 #
 #   Bulk-clears the *contents* of every cache directory under BASE whose full

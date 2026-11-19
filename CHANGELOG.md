@@ -7,6 +7,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **Stale git worktrees** menu action. Finds linked worktrees under your dev folders that no one
+  has touched for `WORKTREE_AGE_DAYS` (default 7) and removes only those with a clean
+  `git status`, every commit on a remote, and no process using them. Lists what it keeps and why,
+  asks first, and uses `git worktree remove`, so branches survive. `WORKTREE_KEEP_RE` protects
+  paths; `WORKTREE_CLEAN_ASSUME_YES=1` for scripts.
+- **Colima** menu action and disk-map recommendation. Deletes every Colima profile with its data
+  (`colima delete --data`) and leftover Lima data disks that a plain `colima delete` leaves
+  behind. Docker Desktop is untouched. `COLIMA_CLEAN_ASSUME_YES=1` for scripts.
+- Clean up now removes Codex CLI runtimes (`~/.cache/codex-runtimes`, skipped while Codex runs)
+  and stale Cursor settings-DB copies (`state.vscdb.bak-*`, often ~500 MB each).
+
+### Fixed
+- "Delete unavailable simulators" (and the disk map's simulator erase) were skipped when
+  `xcode-select` points at the Command Line Tools, which have no `simctl`. They now fall back to
+  an installed `Xcode.app` for that one command.
+- The uv step no longer waits 300 s on the cache lock or deletes files under a running uv/uvx
+  process (such as an MCP server started with `uvx`). It is skipped with a tip while one runs.
+
 ### Changed
 - **Disk map scans live and in parallel.** The map opens immediately (empty) and fills in once a
   second while a pool of background `du` workers (`DM_JOBS`, default CPU count, max 8) measures

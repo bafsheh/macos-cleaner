@@ -119,8 +119,11 @@ clean_dir "$HOME/Library/Developer/Xcode/UserData/Previews"    "SwiftUI Previews
 clean_dir "$HOME/Library/Developer/Xcode/DocumentationCache"   "Xcode documentation cache"
 clean_dir "$HOME/Library/Developer/CoreSimulator/Caches"       "iOS Simulator caches"
 # Simulators whose runtime is no longer installed can never boot again.
-if xcrun --find simctl &>/dev/null; then
-    run_step "Delete unavailable simulators"  "xcrun simctl delete unavailable"
+_simctl_cmd=$(simctl_cmd)
+if [[ -n $_simctl_cmd ]]; then
+    run_step "Delete unavailable simulators"  "$_simctl_cmd delete unavailable"
+else
+    skip_missing "Xcode simctl"
 fi
 }
 
@@ -259,15 +262,22 @@ say "Python tooling caches"
 # CLI purge commands
 command -v pip   &>/dev/null && run_step "pip cache purge"      "pip cache purge"
 command -v pip3  &>/dev/null && run_step "pip3 cache purge"     "pip3 cache purge"
-command -v uv    &>/dev/null && run_step "uv cache clean"       "uv cache clean"
 command -v conda &>/dev/null && run_step "conda clean --all"    "conda clean --all --yes"
 
 # pip
 clean_dir "$HOME/.cache/pip"               "pip cache (~/.cache/pip)"
 clean_dir "$HOME/Library/Caches/pip"       "pip cache (Library)"
 
-# uv
-clean_dir "$HOME/.cache/uv"                "uv cache"
+# uv - a running uv/uvx process (e.g. an MCP server started with uvx) holds the
+# cache lock: `uv cache clean` then waits 300s, and deleting files under it
+# breaks that process. Skip both while one is running.
+if pgrep -x uv &>/dev/null || pgrep -x uvx &>/dev/null; then
+    skip_in_use "uv cache" "a uv/uvx process is running (often an MCP server) and holds the cache lock" \
+        "quit it (close Claude/Codex/IDE sessions), then run: uv cache clean"
+else
+    command -v uv &>/dev/null && run_step "uv cache clean" "uv cache clean"
+    clean_dir "$HOME/.cache/uv"            "uv cache"
+fi
 
 # Poetry
 clean_dir "$HOME/.cache/pypoetry"          "Poetry cache (~/.cache)"
@@ -604,6 +614,10 @@ clean_dir "$HOME/Library/Application Support/Cursor/Code Cache"           "Curso
 clean_dir "$HOME/Library/Application Support/Cursor/GPUCache"             "Cursor GPUCache"
 clean_dir "$HOME/Library/Application Support/Cursor/logs"                 "Cursor logs"
 clean_dir "$HOME/Library/Caches/com.todesktop.230313mzl4w4u92"            "Cursor (Library)"
+# Stale copies of Cursor's settings DB (often ~500 MB each). The live
+# state.vscdb and VS Code's own state.vscdb.backup are never touched.
+remove_files "$HOME/Library/Application Support/Cursor/User/globalStorage" \
+             "state.vscdb.bak-*"                                          "Cursor state DB backups"
 
 # ── Windsurf ─────────────────────────────────────────────────────────────────
 clean_dir "$HOME/Library/Application Support/Windsurf/Cache"              "Windsurf Cache"
@@ -643,6 +657,16 @@ clean_dir "$HOME/Library/Application Support/Claude/GPUCache"             "Claud
 clean_dir "$HOME/Library/Application Support/Claude/logs"                 "Claude logs"
 clean_dir "$HOME/Library/Caches/com.anthropic.claudefordesktop"           "Claude desktop (Library)"
 clean_dir "$HOME/Library/Logs/Claude"                                     "Claude logs (Library)"
+
+# ── Codex CLI ────────────────────────────────────────────────────────────────
+# Downloaded runtimes (~2 GB); Codex fetches them again on next start.
+if pgrep -f "$HOME/.cache/codex-runtimes" &>/dev/null; then
+    skip_in_use "Codex runtimes" "a process is running from ~/.cache/codex-runtimes" \
+        "quit Codex, then run the cleanup again"
+else
+    clean_dir "$HOME/.cache/codex-runtimes"                               "Codex runtimes"
+fi
+clean_dir "$HOME/Library/Caches/Codex"                                    "Codex cache (Library)"
 
 # ── ChatGPT (OpenAI) ─────────────────────────────────────────────────────────
 clean_dir "$HOME/Library/Application Support/ChatGPT/Cache"               "ChatGPT Cache"

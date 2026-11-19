@@ -553,6 +553,7 @@ _dm_rec_paths() {
         ollama)    printf '%s\n' "$HOME/.ollama/models" ;;
         aimodels)  printf '%s\n' "$HOME/.cache/huggingface" "$HOME/.lmstudio/models" "$HOME/.cache/lm-studio" ;;
         docker)    printf '%s\n' "$HOME/Library/Containers/com.docker.docker/Data/vms" ;;
+        colima)    printf '%s\n' "$HOME/.colima" ;;
         temp|jsbuild|nodemods|worktrees|installers)
                    [[ -f $DM_DIR/list_$1 ]] && cat "$DM_DIR/list_$1" ;;
     esac
@@ -634,6 +635,7 @@ archives|review|Xcode Archives (needed to symbolicate)|~/Library/Developer/Xcode
 ollama|review|Ollama models|~/.ollama/models
 aimodels|review|Hugging Face & LM Studio models|~/.cache/huggingface, ~/.lmstudio
 docker|review|Docker disk (all containers & images)|~/Library/Containers/com.docker.docker
+colima|review|Colima VMs & their Docker data|~/.colima
 nodemods|review|node_modules in idle projects (30+ days)|<projects>/*/node_modules
 worktrees|review|Claude Code worktrees (clean ones only)|<projects>/.claude/worktrees
 installers|review|macOS installer apps|/Applications/Install macOS*.app
@@ -743,10 +745,18 @@ _dm_apply() {
         worktrees) _dm_remove_worktrees ;;
         ollama)    ollama_clean ;;
         docker)    docker_clean ;;
-        sims)      run_step "Shut down all simulators" "xcrun simctl shutdown all"
-                   run_step "Erase all simulators"     "xcrun simctl erase all" ;;
+        colima)    colima_clean ;;
+        sims)      local sc; sc=$(simctl_cmd)
+                   if [[ -z $sc ]]; then skip_missing "Xcode simctl"; return; fi
+                   run_step "Shut down all simulators" "$sc shutdown all"
+                   run_step "Erase all simulators"     "$sc erase all" ;;
         *)         while IFS= read -r p; do
-                       [[ -d $p ]] && clean_dir "$p" "$label - ${p##*/}"
+                       [[ -d $p ]] || continue
+                       if [[ $p == "$HOME/.cache/uv" ]] && pgrep -x uv &>/dev/null; then
+                           skip_in_use "$label - uv" "a uv/uvx process holds the cache lock"
+                           continue
+                       fi
+                       clean_dir "$p" "$label - ${p##*/}"
                    done < <(_dm_rec_paths "$key") ;;
     esac
 }

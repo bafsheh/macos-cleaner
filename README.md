@@ -145,7 +145,9 @@ Pick **Cleanup & maintenance** to open the checklist.
      [ ]  Flush DNS cache
      [✓]  Free common dev ports
      [ ]  Kill all open apps   (spares terminals · IDEs · Finder)
+     [ ]  Stale git worktrees  (clean · pushed · idle 7+ days · branches kept)
      [ ]  Docker - remove ALL containers & images      ⚠ destructive
+     [ ]  Colima - delete VMs & their Docker data      ⚠ destructive
      [ ]  Ollama / llama - remove ALL models & caches  ⚠ destructive
      [ ]  Shut down Mac when all actions finish
         Back - return to main menu
@@ -186,7 +188,9 @@ menu, where you can run more or pick **Exit** to finish.
 | **Flush DNS cache** | Refreshes your Mac's address book for websites, which fixes some loading issues. | Asks for your password. |
 | **Free common dev ports** | Closes stuck background programs that block common developer connections. | For developers. Leaves normal apps alone. |
 | **Kill all open apps** | Quits all your open apps at once. | Asks first. Always spares your Terminal, editor, and Finder. |
+| **Stale git worktrees** | Removes extra git worktrees (often left behind by AI coding agents) that nobody has touched for 7+ days. | For developers. Shows the list and asks first. Only removes a worktree with no uncommitted work, every commit pushed, and nothing running in it. Branches are kept. |
 | **Docker, remove ALL** | Wipes all Docker containers and images. | ⚠️ For developers. Deletes a lot. Pick it only if you mean it. |
+| **Colima, delete** | Deletes Colima, a second Docker runtime many Macs have next to Docker Desktop, with all its data. | ⚠️ Deletes its images, containers and volumes. Docker Desktop is not touched. |
 | **Ollama, remove ALL** | Deletes all downloaded AI models. | ⚠️ Large re-downloads later if you need them again. |
 | **Shut down when done** | Turns the Mac off after everything finishes. | You get a countdown. Press any key to cancel. |
 
@@ -350,8 +354,13 @@ You can tweak behaviour with environment variables. No config file needed:
 | `TEMP_AGE_DAYS` | `3` | Temp items untouched this many days are removed |
 | `DM_JOBS` | CPU count (max 8) | How many folders the disk map scans at the same time |
 | `SHUTDOWN_DELAY` | `15` | Seconds in the cancellable shutdown countdown |
+| `WORKTREE_SCAN_ROOTS` | auto | Folders to scan for stale git worktrees |
+| `WORKTREE_AGE_DAYS` | `7` | Worktrees untouched this many days are candidates |
+| `WORKTREE_KEEP_RE` | unset | Regex of worktree paths never removed (e.g. one an MCP server runs from) |
 | `KILL_APPS_ASSUME_YES` | `0` | Set `1` to quit apps without confirmation |
+| `WORKTREE_CLEAN_ASSUME_YES` | `0` | Set `1` to remove stale worktrees without confirmation |
 | `DOCKER_CLEAN_ASSUME_YES` | `0` | Set `1` to allow the Docker wipe without confirmation |
+| `COLIMA_CLEAN_ASSUME_YES` | `0` | Set `1` to allow the Colima delete without confirmation |
 | `OLLAMA_CLEAN_ASSUME_YES` | `0` | Set `1` to allow the Ollama wipe without confirmation |
 | `NO_COLOR` | unset | Set to turn off coloured output |
 
@@ -388,7 +397,9 @@ lib/
    ├─ flush_dns.sh      # flush the DNS cache
    ├─ free_ports.sh     # free common dev ports
    ├─ kill_apps.sh      # quit open apps (spares terminals / IDEs / Finder)
+   ├─ worktree_clean.sh # remove clean, pushed, idle git worktrees
    ├─ docker_clean.sh   # remove all Docker containers and images
+   ├─ colima_clean.sh   # delete Colima VMs and their data disks
    └─ ollama_clean.sh   # remove all Ollama models and caches
 ```
 
