@@ -8,6 +8,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Project build dirs** menu action, using the rules of [plonge](https://github.com/mattt/plonge).
+  Finds `node_modules`, `.venv`, `target`, `.build`, `dist`, `DerivedData`, `.next`, `_build`,
+  `vendor/bundle` and similar folders in your dev folders. Generic names need a project file beside
+  them (`target` next to `Cargo.toml` or `pom.xml`, `dist` next to `package.json` …). A folder is
+  deleted only when Git ignores it, it holds no tracked file or nested repo, its repo has had no Git
+  activity for `PROJECT_QUIET_HOURS` (default 24), and no running process works in that repo.
+  Lists what it keeps and why, asks first. `PROJECT_KEEP_RE`, `PROJECT_SCAN_ROOTS`,
+  `PROJECT_CLEAN_ASSUME_YES=1` for scripts.
+- Clean up §33 (from plonge's shared-cache rules): Zig global cache, Elixir Hex packages, rebar3 Hex
+  cache and `mise cache prune`. Also Yarn 2+ global cache, downloaded RubyGems `.gem` files, and
+  `CARGO_HOME` / `GRADLE_USER_HOME` are honoured.
+- `tests/run_tests.sh`: regression tests that run in CI against a throwaway HOME and a stub
+  `docker`.
 - **Stale git worktrees** menu action. Finds linked worktrees under your dev folders that no one
   has touched for `WORKTREE_AGE_DAYS` (default 7) and removes only those with a clean
   `git status`, every commit on a remote, and no process using them. Lists what it keeps and why,
@@ -20,6 +33,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   and stale Cursor settings-DB copies (`state.vscdb.bak-*`, often ~500 MB each).
 
 ### Fixed
+- **Empty Trash left items behind.** With Full Disk Access, read-only folders (trashed
+  `node_modules`, Go module caches, app bundles) and Finder-locked files could not be deleted, yet
+  the step still reported success. Trash folders are now unlocked and made writable first, and any
+  folder clean that leaves items behind now says how many.
+- **Docker cleanup** said "already empty" while the build cache still used gigabytes, failed on an
+  image with two tags, froze when the daemon did not answer (`docker info` now times out after
+  `DOCKER_INFO_TIMEOUT`, default 20 s), and never reported the space freed. It now shows the Mac's
+  free-space gain and the Docker Desktop disk size, and explains that Docker Desktop returns space
+  gradually. Clean up uses the built-in `docker builder prune` instead of the optional buildx plugin.
 - "Delete unavailable simulators" (and the disk map's simulator erase) were skipped when
   `xcode-select` points at the Command Line Tools, which have no `simctl`. They now fall back to
   an installed `Xcode.app` for that one command.

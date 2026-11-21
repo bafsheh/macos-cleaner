@@ -25,11 +25,15 @@
 # │    WORKTREE_SCAN_ROOTS  space-separated roots for the stale-worktree scan     │
 # │    WORKTREE_AGE_DAYS=7  worktrees untouched this many days are candidates     │
 # │    WORKTREE_KEEP_RE     regex of worktree paths never removed                 │
+# │    PROJECT_SCAN_ROOTS   space-separated roots for the project-folder scan     │
+# │    PROJECT_QUIET_HOURS=24 skip repos with Git activity this recently          │
+# │    PROJECT_KEEP_RE      regex of project-folder paths never removed           │
 # │    NO_COLOR          set to disable all colour output (CLICOLOR_FORCE=1 re-on)│
 # │                                                                               │
 # │  Non-interactive opt-ins (destructive actions skip their y/N prompt)          │
 # │    KILL_APPS_ASSUME_YES=1      quit apps without confirmation                  │
 # │    WORKTREE_CLEAN_ASSUME_YES=1 remove clean, pushed, idle git worktrees        │
+# │    PROJECT_CLEAN_ASSUME_YES=1  delete Git-ignored project build folders        │
 # │    DOCKER_CLEAN_ASSUME_YES=1   wipe containers+images (DOCKER_CLEAN_VOLUMES=1) │
 # │    COLIMA_CLEAN_ASSUME_YES=1   delete all Colima VMs and their data disks      │
 # │    OLLAMA_CLEAN_ASSUME_YES=1   wipe all Ollama/llama model weights             │
@@ -75,6 +79,7 @@ source "$LIB_DIR/actions/flush_dns.sh"
 source "$LIB_DIR/actions/free_ports.sh"
 source "$LIB_DIR/actions/kill_apps.sh"
 source "$LIB_DIR/actions/worktree_clean.sh"
+source "$LIB_DIR/actions/project_clean.sh"
 source "$LIB_DIR/actions/docker_clean.sh"
 source "$LIB_DIR/actions/colima_clean.sh"
 source "$LIB_DIR/actions/ollama_clean.sh"

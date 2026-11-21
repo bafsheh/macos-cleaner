@@ -446,18 +446,41 @@ clean_dir() {
         (( TOTAL_TIMEDOUT++ )); (( TOTAL_SKIPPED_PROTECTED++ ))
         warn "TIMED OUT after ${timeout_sec}s - partial cleanup ← $label"
     elif (( rc == 0 )); then
-        local -i size_after_kb freed_kb
+        local -i size_after_kb freed_kb left
         size_after_kb=$(dir_size_kb "$target")
         (( freed_kb = size_before_kb - size_after_kb )) || true
         (( freed_kb < 0 )) && freed_kb=0
         (( TOTAL_FREED_KB += freed_kb ))
-        (( TOTAL_CLEANED++ ))
-        ok "freed $(human_size $freed_kb) in ${elapsed}s ← $label"
+        # find can exit 0 yet leave entries it could not unlink (read-only
+        # parent folder, locked file) - never report those as fully cleaned.
+        # shellcheck disable=SC2086
+        left=$( $sudo_prefix find "$target" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ' )
+        if (( left > 0 )); then
+            (( TOTAL_SKIPPED_PROTECTED++ ))
+            warn "freed $(human_size $freed_kb); ${left} item(s) could not be removed ← $label"
+        else
+            (( TOTAL_CLEANED++ ))
+            ok "freed $(human_size $freed_kb) in ${elapsed}s ← $label"
+        fi
     else
         (( TOTAL_SKIPPED_PROTECTED++ ))
         warn "partial (exit=${rc}, ${elapsed}s) - some items in use ← $label"
     fi
     echo
+}
+
+# =============================================================================
+# § docker_ready
+#
+#   True when the docker CLI exists and its daemon answers within
+#   DOCKER_INFO_TIMEOUT seconds (default 20). A daemon that is still starting
+#   (Docker Desktop, Colima) can leave `docker info` hanging for minutes.
+# =============================================================================
+docker_ready() {
+    command -v docker &>/dev/null || return 1
+    local to=${DOCKER_INFO_TIMEOUT:-20}
+    [[ $to =~ ^[0-9]+$ ]] && (( to > 0 )) || to=20
+    run_timeout "$to" docker info &>/dev/null
 }
 
 # =============================================================================
@@ -793,6 +816,24 @@ purge_stale() {
 }
 
 # =============================================================================
+# § _clean_trash_dir DIR LABEL
+#
+#   clean_dir for a Trash folder. Trashed items are often read-only folders
+#   (node_modules, Go module caches, app bundles) or files locked in Finder
+#   (Get Info ▸ Locked). `find -delete` cannot remove those, so first clear the
+#   user "locked" flag and give yourself write permission on everything inside.
+#   Only your own items: anything owned by root still needs Finder or sudo.
+# =============================================================================
+_clean_trash_dir() {
+    local dir="$1" label="$2"
+    if [[ -d $dir ]] && ! is_tcc_blocked "$dir"; then
+        run_timeout "$DIR_TIMEOUT" chflags -R nouchg "$dir" 2>/dev/null
+        run_timeout "$DIR_TIMEOUT" chmod -R u+w "$dir" 2>/dev/null
+    fi
+    clean_dir "$dir" "$label"
+}
+
+# =============================================================================
 # § empty_trash
 #
 #   Empties your Trash: ~/.Trash, iCloud Drive's Trash, and your Trash on
@@ -808,12 +849,12 @@ empty_trash() {
     local trash="$HOME/.Trash"
 
     if ! is_tcc_blocked "$trash"; then
-        clean_dir "$trash" "User Trash"
-        clean_dir "$HOME/Library/Mobile Documents/com~apple~CloudDocs/.Trash" "iCloud Drive Trash"
+        _clean_trash_dir "$trash" "User Trash"
+        _clean_trash_dir "$HOME/Library/Mobile Documents/com~apple~CloudDocs/.Trash" "iCloud Drive Trash"
         local vol
         for vol in /Volumes/*; do
             [[ $vol -ef / ]] && continue                 # boot volume alias
-            [[ -d "$vol/.Trashes/$UID" ]] && clean_dir "$vol/.Trashes/$UID" "Trash on ${vol##*/}"
+            [[ -d "$vol/.Trashes/$UID" ]] && _clean_trash_dir "$vol/.Trashes/$UID" "Trash on ${vol##*/}"
         done
         return 0
     fi

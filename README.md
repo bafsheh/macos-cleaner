@@ -189,7 +189,8 @@ menu, where you can run more or pick **Exit** to finish.
 | **Free common dev ports** | Closes stuck background programs that block common developer connections. | For developers. Leaves normal apps alone. |
 | **Kill all open apps** | Quits all your open apps at once. | Asks first. Always spares your Terminal, editor, and Finder. |
 | **Stale git worktrees** | Removes extra git worktrees (often left behind by AI coding agents) that nobody has touched for 7+ days. | For developers. Shows the list and asks first. Only removes a worktree with no uncommitted work, every commit pushed, and nothing running in it. Branches are kept. |
-| **Docker, remove ALL** | Wipes all Docker containers and images. | ⚠️ For developers. Deletes a lot. Pick it only if you mean it. |
+| **Project build dirs** | Deletes rebuildable folders inside your code projects: `node_modules`, `.venv`, `target`, `.build`, `dist`, `DerivedData` and more (the rules of [plonge](https://github.com/mattt/plonge)). | For developers. Shows the list and asks first. Only deletes a folder that Git ignores, holds no tracked file, sits in a repo with no Git activity for 24 hours, and no running program is working in. Rebuild with `npm install`, `uv sync`, `cargo build` … |
+| **Docker, remove ALL** | Wipes all Docker containers, images and build cache. | ⚠️ For developers. Deletes a lot. Pick it only if you mean it. Docker Desktop gives the space back to your Mac over a few minutes. |
 | **Colima, delete** | Deletes Colima, a second Docker runtime many Macs have next to Docker Desktop, with all its data. | ⚠️ Deletes its images, containers and volumes. Docker Desktop is not touched. |
 | **Ollama, remove ALL** | Deletes all downloaded AI models. | ⚠️ Large re-downloads later if you need them again. |
 | **Shut down when done** | Turns the Mac off after everything finishes. | You get a countdown. Press any key to cancel. |
@@ -293,17 +294,17 @@ use one, that section finds nothing and moves on.
 | 4 | Xcode: DerivedData, Archives, device support, SwiftUI Previews, Simulator caches, unavailable simulators |
 | 5 | Apple dev tools: Swift PM, CocoaPods, Carthage, Mint |
 | 6 | Homebrew: orphaned packages, cleanup, logs |
-| 7 | JavaScript / Node: npm and npx, yarn, pnpm, bun, deno, volta, nvm, turbo, Puppeteer, Playwright |
+| 7 | JavaScript / Node: npm and npx, yarn (1 and 2+), pnpm, bun, deno, volta, nvm, turbo, Puppeteer, Playwright |
 | 8 | JavaScript project caches: `.next/cache`, `.turbo`, jest, eslint |
 | 9 | Python tools: pip, uv, poetry, pipenv, hatch, pdm, pyenv, conda |
 | 10 | Python project caches: `__pycache__`, pytest, mypy, ruff |
 | 11 | Go: build, module, test, and fuzz caches |
-| 12 | Rust: Cargo, rustup, sccache |
+| 12 | Rust: Cargo (honours `CARGO_HOME`), rustup, sccache |
 | 13 | C / C++: ccache, Conan, vcpkg |
-| 14 | Ruby: gem cleanup, Bundler cache |
+| 14 | Ruby: gem cleanup, downloaded `.gem` files, Bundler cache |
 | 15 | PHP: Composer, PHPStan, Psalm, PHP-CS-Fixer |
 | 16 | .NET: NuGet local caches |
-| 17 | Java / Kotlin: Gradle, Maven, SBT, Ivy2, SDKMAN |
+| 17 | Java / Kotlin: Gradle (honours `GRADLE_USER_HOME`), Maven, SBT, Ivy2, SDKMAN |
 | 18 | Android: SDK and build caches |
 | 19 | Docker: unused images and build cache |
 | 20 | Cloud / DevOps: Terraform, Pulumi, Ansible, kubectl, AWS, GCP, Azure |
@@ -315,6 +316,7 @@ use one, that section finds nothing and moves on.
 | 26 | Quick Look thumbnails and old iOS update files |
 | 27 | System caches and logs (needs your password) |
 | 28 | Temporary files untouched for 3+ days, plus old Claude Code session folders |
+| 33 | More toolchains: Zig global cache, Elixir Hex packages, Erlang rebar3 Hex cache, mise download cache |
 | (end) | Disk usage report after cleaning, plus a summary |
 
 </details>
@@ -357,8 +359,13 @@ You can tweak behaviour with environment variables. No config file needed:
 | `WORKTREE_SCAN_ROOTS` | auto | Folders to scan for stale git worktrees |
 | `WORKTREE_AGE_DAYS` | `7` | Worktrees untouched this many days are candidates |
 | `WORKTREE_KEEP_RE` | unset | Regex of worktree paths never removed (e.g. one an MCP server runs from) |
+| `PROJECT_SCAN_ROOTS` | auto | Folders to scan for project build folders |
+| `PROJECT_QUIET_HOURS` | `24` | Skip a repo with Git activity (commit, checkout …) this recently |
+| `PROJECT_KEEP_RE` | unset | Regex of project-folder paths never removed |
+| `DOCKER_INFO_TIMEOUT` | `20` | Seconds to wait for the Docker daemon before skipping Docker |
 | `KILL_APPS_ASSUME_YES` | `0` | Set `1` to quit apps without confirmation |
 | `WORKTREE_CLEAN_ASSUME_YES` | `0` | Set `1` to remove stale worktrees without confirmation |
+| `PROJECT_CLEAN_ASSUME_YES` | `0` | Set `1` to delete project build folders without confirmation |
 | `DOCKER_CLEAN_ASSUME_YES` | `0` | Set `1` to allow the Docker wipe without confirmation |
 | `COLIMA_CLEAN_ASSUME_YES` | `0` | Set `1` to allow the Colima delete without confirmation |
 | `OLLAMA_CLEAN_ASSUME_YES` | `0` | Set `1` to allow the Ollama wipe without confirmation |

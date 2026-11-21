@@ -21,3 +21,6 @@ jobs:
 
       - name: ShellCheck
         run: shellcheck --severity=warning mac_cleaner.sh
+
+      - name: Regression tests (system bash 3.2)
+        run: /bin/bash tests/run_tests.sh

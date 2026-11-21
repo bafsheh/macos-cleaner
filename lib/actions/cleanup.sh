@@ -2,7 +2,7 @@
 # =============================================================================
 # § lib/actions/cleanup.sh  ·  Full disk-space cleanup action
 #
-#   run_clean - the comprehensive cleanup flow (32 sections: Trash, caches,
+#   run_clean - the comprehensive cleanup flow (33 sections: Trash, caches,
 #   logs, package-manager stores across every major language/tool ecosystem,
 #   plus Microsoft/Adobe/Photos app caches and a safe "System Data" sweep).
 #   Registered in the action registry as the "Clean up" queue item.
@@ -196,6 +196,7 @@ clean_dir "$HOME/.npm/_cacache"              "npm content-addressable cache"
 clean_dir "$HOME/.npm/_npx"                  "npx package cache"
 clean_dir "$HOME/.npm/_logs"                 "npm logs"
 clean_dir "$HOME/.yarn/cache"                "Yarn classic cache dir"
+clean_dir "$HOME/.yarn/berry/cache"          "Yarn 2+ global cache"
 clean_dir "$HOME/.cache/yarn"                "Yarn cache (~/.cache/yarn)"
 clean_dir "$HOME/Library/Caches/Yarn"        "Yarn cache (Library)"
 clean_dir "$HOME/Library/pnpm/store"         "pnpm store (Library)"
@@ -365,11 +366,12 @@ _clean_s12() {
 section "12 · RUST"
 
 say "Cargo registry, git, rustup, and sccache"
+_cargo_home=${CARGO_HOME:-$HOME/.cargo}
 if command -v cargo &>/dev/null; then
-    clean_dir "$HOME/.cargo/registry/cache"   "Cargo registry cache (tarballs)"
-    clean_dir "$HOME/.cargo/registry/src"     "Cargo registry sources (extracted)"
-    clean_dir "$HOME/.cargo/git/checkouts"    "Cargo git checkouts"
-    clean_dir "$HOME/.cargo/git/db"           "Cargo git databases"
+    clean_dir "$_cargo_home/registry/cache"   "Cargo registry cache (tarballs)"
+    clean_dir "$_cargo_home/registry/src"     "Cargo registry sources (extracted)"
+    clean_dir "$_cargo_home/git/checkouts"    "Cargo git checkouts"
+    clean_dir "$_cargo_home/git/db"           "Cargo git databases"
 else
     skip_missing "cargo"
 fi
@@ -418,6 +420,12 @@ section "14 · RUBY"
 say "RubyGems and Bundler caches"
 if command -v gem &>/dev/null; then
     run_step "gem cleanup"  "gem cleanup"
+    # Downloaded .gem archives - installed gems keep working without them.
+    # Files only, so Bundler's git-source folder (cache/bundler) is kept.
+    _gem_dir=$(gem env gemdir 2>/dev/null)
+    if [[ -n $_gem_dir && -w $_gem_dir/cache ]]; then
+        remove_files "$_gem_dir/cache" "*.gem" "RubyGems download cache (.gem files)"
+    fi
 fi
 clean_dir "$HOME/.bundle/cache"             "Bundler cache"
 }
@@ -471,10 +479,11 @@ section "17 · JAVA · JVM · KOTLIN · SPRING"
 
 say "Maven, Gradle, SBT, Ivy2, Kotlin, Spring, and SDKMAN caches"
 
-# Gradle
-clean_dir "$HOME/.gradle/caches"             "Gradle caches"
-clean_dir "$HOME/.gradle/daemon"             "Gradle daemon logs"
-clean_dir "$HOME/.gradle/wrapper/dists"      "Gradle wrapper distributions"
+# Gradle (GRADLE_USER_HOME moves all of ~/.gradle)
+_gradle_home=${GRADLE_USER_HOME:-$HOME/.gradle}
+clean_dir "$_gradle_home/caches"             "Gradle caches"
+clean_dir "$_gradle_home/daemon"             "Gradle daemon logs"
+clean_dir "$_gradle_home/wrapper/dists"      "Gradle wrapper distributions"
 
 # Maven
 clean_dir "$HOME/.m2/repository/.cache"      "Maven .m2 metadata cache"
@@ -513,6 +522,32 @@ clean_dir "$HOME/.android/build-cache"       "Android incremental build cache"
 }
 
 # =============================================================================
+# § 33 · MORE TOOLCHAINS  (Zig · Elixir Hex · Erlang rebar3 · mise)
+#   Shared caches from plonge's rules (github.com/mattt/plonge) that the
+#   sections above did not cover. All are re-downloaded on the next build.
+# =============================================================================
+_clean_s33() {
+
+section "33 · MORE TOOLCHAINS (Zig · Elixir · Erlang · mise)"
+
+say "Zig, Hex, rebar3, and mise download caches"
+
+# Zig has no cache-clean command. ZIG_GLOBAL_CACHE_DIR, else the XDG path -
+# Zig uses ~/.cache/zig on macOS too.
+clean_dir "${ZIG_GLOBAL_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/zig}" "Zig global cache"
+
+# Elixir (mix) Hex package tarballs and Erlang rebar3's Hex cache
+clean_dir "${HEX_HOME:-$HOME/.hex}/packages"  "Hex package cache"
+clean_dir "$HOME/.cache/rebar3/hex"           "rebar3 Hex cache"
+
+# mise download cache. Installed tool versions are left alone (mise prune
+# --tools would uninstall versions that no config file mentions).
+if command -v mise &>/dev/null; then
+    run_step "mise cache prune"  "mise cache prune"
+fi
+}
+
+# =============================================================================
 # § 19 · DOCKER
 # =============================================================================
 _clean_s19() {
@@ -521,10 +556,10 @@ section "19 · DOCKER"
 
 say "Docker build, layer, and image caches"
 if command -v docker &>/dev/null; then
-    if docker info &>/dev/null 2>&1; then
+    if docker_ready; then
         # -a  removes ALL unused images, not just dangling ones (much more space freed)
         run_step "docker system prune -a"   "docker system prune -af"
-        run_step "docker buildx prune"      "docker buildx prune -f"
+        run_step "docker builder prune"     "docker builder prune -af"
 
         # Answer collected up front by _clean_docker_ask (jobs can't prompt).
         step "[Docker volume prune  (opt-in)]"
@@ -1072,7 +1107,7 @@ _DOCKER_VOL_ANS=skip
 _clean_docker_ask() {
     _DOCKER_VOL_ANS=skip
     [[ -t 0 ]] || return 0   # only prompt when stdin is a terminal
-    command -v docker &>/dev/null && docker info &>/dev/null || return 0
+    docker_ready || return 0
 
     step "[Docker volume prune  (opt-in)]"
     info "cmd     : docker volume prune -f"
@@ -1087,13 +1122,13 @@ _clean_docker_ask() {
 # =============================================================================
 # § run_clean
 #
-#   Full cleanup flow - all 32 sections, in three phases:
+#   Full cleanup flow - all 33 sections, in three phases:
 #     1. in order: banner, disk report, Trash (§1) and the broad sweeps of
 #        ~/Library/Caches, ~/Library/Logs and every Chromium/Electron profile
 #        (§2-§3). Many later sections clear a sub-folder of these, so they
 #        finish first: two deletes racing on one folder report errors.
-#     2. in parallel, CLEAN_JOBS at a time: the per-tool sections §4-§27 and
-#        §29, which never share a folder. Output still prints in order.
+#     2. in parallel, CLEAN_JOBS at a time: the per-tool sections §4-§27,
+#        §29 and §33, which never share a folder. Output still prints in order.
 #     3. in order: §28 and §30 (may ask for your password), then §31 + §32
 #        side by side, then the summary.
 #   Called from show_main_menu when the user selects option 1.
@@ -1110,7 +1145,7 @@ run_clean() {
                  _clean_s10 _clean_s11 _clean_s12 _clean_s13 _clean_s14 _clean_s15 \
                  _clean_s16 _clean_s17 _clean_s18 _clean_s19 _clean_s20 _clean_s21 \
                  _clean_s22 _clean_s23 _clean_s24 _clean_s25 _clean_s26 _clean_s27 \
-                 _clean_s29
+                 _clean_s29 _clean_s33
 
     _clean_s28
     _clean_s30
