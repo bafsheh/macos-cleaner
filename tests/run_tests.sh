@@ -179,6 +179,18 @@ test_project_clean_deletes_only_git_ignored_rebuildable_folders() {
     assert "node_modules outside Git is kept"            test -e "$plain/node_modules/y/i.js"
 }
 
+# Destructive actions must never run unattended without their *_ASSUME_YES.
+test_project_clean_without_terminal_or_opt_in_deletes_nothing() {
+    local app="$TEST_TMP/code/app"
+    make_quiet_repo "$app"
+    echo node_modules/ > "$app/.gitignore"
+    mkdir -p "$app/node_modules/q"; echo q > "$app/node_modules/q/i.js"
+    export PROJECT_SCAN_ROOTS="$TEST_TMP/code"
+    unset PROJECT_CLEAN_ASSUME_YES
+    project_clean
+    assert "nothing is deleted without confirmation" test -e "$app/node_modules/q/i.js"
+}
+
 test_project_clean_skips_repo_with_recent_git_activity() {
     local app="$TEST_TMP/code/busy"
     git init -q "$app"

@@ -139,20 +139,7 @@ OSA
     #   Destructive action → confirmation is required. When stdin is not a TTY
     #   we cannot prompt, so the safe default is to SKIP. Automation can opt in
     #   explicitly with KILL_APPS_ASSUME_YES=1.
-    if [[ -t 0 ]]; then
-        printf "  ${YLW}Quit these ${#targets[@]} app(s)? [y/N]: ${NC}"
-        local answer; read -r answer
-        if [[ $answer != [yY] ]]; then
-            info "Cancelled - no apps were quit."
-            echo; return 0
-        fi
-    elif [[ ${KILL_APPS_ASSUME_YES:-0} == 1 ]]; then
-        info "non-interactive - KILL_APPS_ASSUME_YES=1, proceeding"
-    else
-        warn "non-interactive and no confirmation possible - skipping (set KILL_APPS_ASSUME_YES=1 to override)"
-        echo; return 0
-    fi
-    echo
+    confirm_action "Quit these ${#targets[@]} app(s)?" KILL_APPS_ASSUME_YES || return 0
 
     # ── quit each: graceful (bounded) first, then escalate against the PID ───
     #   AppleScript "quit" is asynchronous — osascript returns 0 immediately.

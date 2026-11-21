@@ -394,20 +394,26 @@ lib/
 ├─ colors.sh            # colour palette
 ├─ core.sh              # runtime flags, macOS guard, timeouts
 ├─ logging.sh           # status messages
-├─ helpers.sh           # disk and execution helpers
+├─ helpers.sh           # disk, execution and confirmation helpers
+├─ diskmap.awk          # treemap layout used by the disk map
 ├─ ui.sh                # menu, multi-select, spinner, progress bar
 ├─ uninstaller.sh       # app / package uninstaller
 ├─ menu.sh              # main menu, action registry, queue runner
 └─ actions/
    ├─ cleanup.sh        # the full disk clean-up
+   ├─ temp_clean.sh     # stale temp files and old Claude Code sessions
    ├─ free_memory.sh    # release inactive RAM
    ├─ flush_dns.sh      # flush the DNS cache
    ├─ free_ports.sh     # free common dev ports
    ├─ kill_apps.sh      # quit open apps (spares terminals / IDEs / Finder)
    ├─ worktree_clean.sh # remove clean, pushed, idle git worktrees
+   ├─ project_clean.sh  # delete Git-ignored build folders (plonge rules)
    ├─ docker_clean.sh   # remove all Docker containers and images
    ├─ colima_clean.sh   # delete Colima VMs and their data disks
-   └─ ollama_clean.sh   # remove all Ollama models and caches
+   ├─ ollama_clean.sh   # remove all Ollama models and caches
+   └─ disk_map.sh       # interactive treemap of your home folder
+tests/
+└─ run_tests.sh         # regression tests (throwaway HOME, stub docker)
 ```
 
 </details>
@@ -418,8 +424,18 @@ lib/
 
 Bug reports and pull requests are welcome. When you add a new cache path, include
 the tool name and version and the macOS version where you confirmed it. To add a
-new maintenance action, drop a file in [lib/actions/](lib/actions/) and register
-it in the arrays in [lib/menu.sh](lib/menu.sh).
+new maintenance action, drop a file in [lib/actions/](lib/actions/), source it in
+[mac_cleaner.sh](mac_cleaner.sh), and register it in the arrays in
+[lib/menu.sh](lib/menu.sh). Destructive actions ask through `confirm_action` in
+[lib/helpers.sh](lib/helpers.sh), so they never run unattended without their
+`*_ASSUME_YES=1`.
+
+Every bug fix comes with a test in [tests/run_tests.sh](tests/run_tests.sh) that
+fails without the fix. Run the tests with macOS's own bash, as CI does:
+
+```bash
+/bin/bash tests/run_tests.sh
+```
 
 ## 📄 License
 

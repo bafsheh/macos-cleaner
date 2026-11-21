@@ -67,19 +67,7 @@ colima_clean() {
     # ── confirm (destructive) ─────────────────────────────────────────────────
     warn "This deletes every Colima VM and ALL Docker data inside it (images, containers, volumes)."
     info "Docker Desktop is not affected."
-    if [[ -t 0 ]]; then
-        printf "  ${YLW}Delete all Colima VMs and data disks now? [y/N]: ${NC}"
-        local answer; read -r answer
-        if [[ $answer != [yY] ]]; then
-            info "Cancelled - nothing removed."; echo; return 0
-        fi
-    elif [[ ${COLIMA_CLEAN_ASSUME_YES:-0} == 1 ]]; then
-        info "non-interactive - COLIMA_CLEAN_ASSUME_YES=1, proceeding"
-    else
-        warn "non-interactive and no confirmation possible - skipping (set COLIMA_CLEAN_ASSUME_YES=1)"
-        echo; return 0
-    fi
-    echo
+    confirm_action "Delete all Colima VMs and data disks now?" COLIMA_CLEAN_ASSUME_YES || return 0
 
     local -i before_kb=$total_kb
 

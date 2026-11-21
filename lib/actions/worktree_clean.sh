@@ -115,19 +115,7 @@ worktree_clean() {
     for k in "${cand[@]}"; do info "  ${k/#$HOME/~}"; done
     echo
 
-    if [[ -t 0 ]]; then
-        printf "  ${YLW}Remove these %d worktrees? Branches are kept. [y/N]: ${NC}" "${#cand[@]}"
-        local answer; read -r answer
-        if [[ $answer != [yY] ]]; then
-            info "Cancelled - nothing removed."; echo; return 0
-        fi
-    elif [[ ${WORKTREE_CLEAN_ASSUME_YES:-0} == 1 ]]; then
-        info "non-interactive - WORKTREE_CLEAN_ASSUME_YES=1, proceeding"
-    else
-        warn "non-interactive and no confirmation possible - skipping (set WORKTREE_CLEAN_ASSUME_YES=1)"
-        echo; return 0
-    fi
-    echo
+    confirm_action "Remove these ${#cand[@]} worktrees? Branches are kept." WORKTREE_CLEAN_ASSUME_YES || return 0
 
     local -i i removed=0 before_kb after_kb
     before_kb=$(disk_avail_kb)

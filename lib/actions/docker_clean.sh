@@ -62,24 +62,18 @@ docker_clean() {
 
     # ── confirm (destructive) ─────────────────────────────────────────────────
     warn "This removes ALL containers and ALL images - they must be re-pulled/rebuilt."
+    confirm_action "Remove all containers & images now?" DOCKER_CLEAN_ASSUME_YES || return 0
+
+    # Volumes are a second, separate opt-in (DOCKER_CLEAN_VOLUMES=1 for scripts).
     local do_volumes=0
     if [[ -t 0 ]]; then
-        printf "  ${YLW}Remove all containers & images now? [y/N]: ${NC}"
-        local answer; read -r answer
-        if [[ $answer != [yY] ]]; then
-            info "Cancelled - nothing removed."; echo; return 0
-        fi
         printf "  ${YLW}Also remove ALL volumes (DELETES database data)? [y/N]: ${NC}"
         local vans; read -r vans
         [[ $vans == [yY] ]] && do_volumes=1
-    elif [[ ${DOCKER_CLEAN_ASSUME_YES:-0} == 1 ]]; then
-        info "non-interactive - DOCKER_CLEAN_ASSUME_YES=1, proceeding"
-        [[ ${DOCKER_CLEAN_VOLUMES:-0} == 1 ]] && do_volumes=1
-    else
-        warn "non-interactive and no confirmation possible - skipping (set DOCKER_CLEAN_ASSUME_YES=1)"
-        echo; return 0
+        echo
+    elif [[ ${DOCKER_CLEAN_VOLUMES:-0} == 1 ]]; then
+        do_volumes=1
     fi
-    echo
 
     # ── run the teardown with a Docker-appropriate timeout ────────────────────
     #   Validate DOCKER_TIMEOUT before assigning into the integer CMD_TIMEOUT -

@@ -181,19 +181,7 @@ project_clean() {
     (( ${#cand[@]} > 30 )) && info "  … and $(( ${#cand[@]} - 30 )) smaller ones (full list in the log)"
     echo
 
-    if [[ -t 0 ]]; then
-        printf "  ${YLW}Delete these %d folders? Rebuild with npm install, uv sync, cargo build … [y/N]: ${NC}" "${#cand[@]}"
-        local answer; read -r answer
-        if [[ $answer != [yY] ]]; then
-            info "Cancelled - nothing removed."; echo; return 0
-        fi
-    elif [[ ${PROJECT_CLEAN_ASSUME_YES:-0} == 1 ]]; then
-        info "non-interactive - PROJECT_CLEAN_ASSUME_YES=1, proceeding"
-    else
-        warn "non-interactive and no confirmation possible - skipping (set PROJECT_CLEAN_ASSUME_YES=1)"
-        echo; return 0
-    fi
-    echo
+    confirm_action "Delete these ${#cand[@]} folders? Rebuild with npm install, uv sync, cargo build …" PROJECT_CLEAN_ASSUME_YES || return 0
 
     local -i removed=0 freed_kb=0
     for (( i = 0; i < ${#cand[@]}; i++ )); do

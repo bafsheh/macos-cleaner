@@ -5,10 +5,13 @@
 #   Reusable, side-effect-aware building blocks shared by every action:
 #     • disk_free / human_size / dir_size_kb - measurement
 #     • run_timeout                          - portable timeout wrapper
+#     • run_parallel                         - run sections side by side
 #     • run_step                             - logged command execution
-#     • clean_dir / purge_stale             - safe content deletion
+#     • confirm_action                       - y/N gate for destructive actions
+#     • docker_ready                         - Docker daemon check with timeout
+#     • clean_dir / remove_files / purge_stale - safe content deletion
 #     • sweep_caches / sweep_chromium_caches - bulk cache sweeps
-#     • empty_trash                          - Trash (Finder fallback under TCC)
+#     • empty_trash / _clean_trash_dir       - Trash (Finder fallback under TCC)
 #     • clean_tm_snapshots                   - Time Machine local snapshots
 #     • report_largest_dirs                  - informational disk report
 #     • dev_roots / _scan_and_delete         - dev-folder artefact sweeper
@@ -465,6 +468,32 @@ clean_dir() {
     else
         (( TOTAL_SKIPPED_PROTECTED++ ))
         warn "partial (exit=${rc}, ${elapsed}s) - some items in use ← $label"
+    fi
+    echo
+}
+
+# =============================================================================
+# § confirm_action PROMPT ASSUME_VAR
+#
+#   The one confirmation gate for destructive actions. On a terminal it asks
+#   PROMPT with a [y/N] default of No. Without a terminal (cron, pipes) nobody
+#   can answer, so it proceeds only when the variable named ASSUME_VAR is 1
+#   (e.g. DOCKER_CLEAN_ASSUME_YES=1). Returns 0 to go ahead, 1 to skip; the
+#   caller does `confirm_action "…?" FOO_ASSUME_YES || return 0`.
+# =============================================================================
+confirm_action() {
+    local prompt="$1" var="$2" answer
+    if [[ -t 0 ]]; then
+        printf "  ${YLW}%s [y/N]: ${NC}" "$prompt"
+        read -r answer
+        if [[ $answer != [yY] ]]; then
+            info "Cancelled - nothing changed."; echo; return 1
+        fi
+    elif [[ ${!var:-0} == 1 ]]; then
+        info "non-interactive - ${var}=1, proceeding"
+    else
+        warn "non-interactive and no confirmation possible - skipping (set ${var}=1)"
+        echo; return 1
     fi
     echo
 }

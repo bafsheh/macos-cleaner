@@ -49,6 +49,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   process (such as an MCP server started with `uvx`). It is skipped with a tip while one runs.
 
 ### Changed
+- Destructive actions (Docker, Colima, Ollama, worktrees, project folders, quit apps) share one
+  confirmation helper, `confirm_action`, instead of six copies of the same prompt.
 - **Disk map scans live and in parallel.** The map opens immediately (empty) and fills in once a
   second while a pool of background `du` workers (`DM_JOBS`, default CPU count, max 8) measures
   folders from a shared queue. Big folders (`~/Library`, `~/Desktop`, `~/Documents`, `~/Projects`, …)

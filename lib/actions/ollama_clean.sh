@@ -55,19 +55,7 @@ ollama_clean() {
 
     # ── confirm (destructive) ─────────────────────────────────────────────────
     warn "This DELETES all downloaded model weights - they must be re-pulled."
-    if [[ -t 0 ]]; then
-        printf "  ${YLW}Remove ALL Ollama/llama models & caches now? [y/N]: ${NC}"
-        local answer; read -r answer
-        if [[ $answer != [yY] ]]; then
-            info "Cancelled - nothing removed."; echo; return 0
-        fi
-    elif [[ ${OLLAMA_CLEAN_ASSUME_YES:-0} == 1 ]]; then
-        info "non-interactive - OLLAMA_CLEAN_ASSUME_YES=1, proceeding"
-    else
-        warn "non-interactive and no confirmation possible - skipping (set OLLAMA_CLEAN_ASSUME_YES=1)"
-        echo; return 0
-    fi
-    echo
+    confirm_action "Remove ALL Ollama/llama models & caches now?" OLLAMA_CLEAN_ASSUME_YES || return 0
 
     # ── 1. graceful per-model removal (keeps the daemon's index consistent) ───
     if (( has_ollama == 1 )); then
