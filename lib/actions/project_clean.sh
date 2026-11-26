@@ -94,6 +94,17 @@ _pc_why_kept() {
     done <<< "$_PC_CWDS"
 }
 
+# =============================================================================
+# § project_clean  (menu action)
+#
+#   Scans the dev folders, lists what is safe to remove and what is kept (with
+#   the reason), asks once, re-checks each folder, then deletes.
+#
+#   Globals:
+#     reads  PROJECT_SCAN_ROOTS, PROJECT_QUIET_HOURS, PROJECT_KEEP_RE,
+#            PROJECT_CLEAN_ASSUME_YES, SCAN_TIMEOUT, DIR_TIMEOUT
+#     writes TOTAL_FREED_KB / TOTAL_CLEANED / TOTAL_FAILED
+# =============================================================================
 project_clean() {
     section "PROJECT BUILD FOLDERS (node_modules · .venv · target · …)"
 
@@ -137,9 +148,9 @@ project_clean() {
 
     local -a cand=() cand_kb=() kept=()
     local -i total_kb=0 kb
-    local p rule why
+    local p why
     while IFS= read -r p; do
-        rule=$(_pc_rule "$p") || continue
+        _pc_rule "$p" > /dev/null || continue     # not a rebuildable folder name
         why=$(_pc_why_kept "$p")
         if [[ -n $why ]]; then
             kept+=("${p/#$HOME/~}  ← $why")
@@ -151,7 +162,7 @@ project_clean() {
     done < "$found_f"
     rm -f "$found_f"
 
-    local k i
+    local i
     if (( ${#kept[@]} > 0 )); then
         say "Kept (${#kept[@]}):"
         for (( i = 0; i < ${#kept[@]} && i < 25; i++ )); do info "  ${kept[i]}"; done

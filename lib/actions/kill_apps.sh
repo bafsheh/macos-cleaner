@@ -20,7 +20,8 @@
 #
 #   The user must confirm (y/N) before anything is quit (interactive only).
 #
-#   Requires (sourced earlier): colors.sh, logging.sh, helpers.sh (run_timeout)
+#   Requires (sourced earlier): colors.sh, logging.sh, helpers.sh (run_timeout ·
+#                               proc_ancestor_pids · proc_wait_gone)
 #   Public entry: kill_apps
 # =============================================================================
 
@@ -37,7 +38,14 @@ declare -ra SPARE_SUBSTR=(
     "iterm" "terminal"
 )
 
-# ── _kapps_is_spared NAME → 0 (spare) / 1 (killable) ─────────────────────────
+# =============================================================================
+# § _kapps_is_spared NAME
+#
+#   Arguments:
+#     NAME   an app's display name, any case
+#   Returns:
+#     0 when the app is a terminal emulator (spare it), 1 when it may be quit
+# =============================================================================
 _kapps_is_spared() {
     local lc; lc=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
     local s
@@ -46,37 +54,15 @@ _kapps_is_spared() {
     return 1
 }
 
-# ── _kapps_ancestor_pids → prints the PID chain from this process up to pid 1 ──
-#   Whatever launched us (login shell, terminal, or an editor's integrated
-#   terminal) appears in this chain. Sparing these PIDs means the script never
-#   force-kills its own host, so we can safely close editors like VS Code when
-#   the script is run from a real terminal, yet leave the host intact when it
-#   is run from the editor's own terminal.
-_kapps_ancestor_pids() {
-    local pid=$$
-    while (( pid > 1 )); do
-        printf '%s\n' "$pid"
-        pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
-        [[ -z $pid ]] && break
-    done
-}
-
-# ── _kapps_wait_dead PID TIMEOUT → 0 (process gone) / 1 (still alive) ─────────
-#   Polls `kill -0` (send no signal, just probe existence) up to TIMEOUT
-#   seconds. This is what turns "quit" from fire-and-forget into a verified
-#   outcome.
-_kapps_wait_dead() {
-    local pid=$1 timeout=$2
-    local -i waited=0
-    while (( waited < timeout * 5 )); do          # poll every 200ms
-        kill -0 "$pid" 2>/dev/null || return 0    # gone
-        sleep 0.2
-        (( waited++ ))
-    done
-    kill -0 "$pid" 2>/dev/null && return 1        # still alive
-    return 0
-}
-
+# =============================================================================
+# § kill_apps  (menu action)
+#
+#   Lists the open foreground apps, asks once, then quits each one - nicely
+#   first, by signal if it lingers - and reports graceful / forced / failed.
+#
+#   Globals:
+#     reads KILL_APPS_ASSUME_YES (pre-approval for non-interactive runs)
+# =============================================================================
 kill_apps() {
     section "KILL OPEN APPS"
 
@@ -113,7 +99,7 @@ OSA
     local apid
     while IFS= read -r apid; do
         [[ -n $apid ]] && spare_pids+="$apid "
-    done < <(_kapps_ancestor_pids)
+    done < <(proc_ancestor_pids)
 
     local -a targets=() target_pids=()
     local name pid
@@ -155,21 +141,21 @@ OSA
 
         # 1) ask nicely and give it a moment to shut down cleanly.
         run_timeout 8 osascript -e "tell application \"${name}\" to quit" &>/dev/null
-        if _kapps_wait_dead "$pid" 8; then
+        if proc_wait_gone "$pid" 8; then
             (( quit++ )); ok "quit gracefully ← $name"
             continue
         fi
 
         # 2) still alive → SIGTERM the PID, wait briefly.
         kill -TERM "$pid" 2>/dev/null
-        if _kapps_wait_dead "$pid" 4; then
+        if proc_wait_gone "$pid" 4; then
             (( forced++ )); warn "force-killed (SIGTERM) ← $name"
             continue
         fi
 
         # 3) last resort → SIGKILL, cannot be ignored.
         kill -KILL "$pid" 2>/dev/null
-        if _kapps_wait_dead "$pid" 3; then
+        if proc_wait_gone "$pid" 3; then
             (( forced++ )); warn "force-killed (SIGKILL) ← $name"
         else
             (( failed++ )); fail "could not quit ← $name (pid $pid still alive)"

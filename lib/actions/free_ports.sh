@@ -29,6 +29,12 @@ declare -ra DEV_PORTS=(
     24678                      # Vite HMR
 )
 
+# =============================================================================
+# § free_ports  (menu action)
+#
+#   Kills whatever is listening on each port in DEV_PORTS and reports the
+#   ports that were freed. This shell itself is never a target.
+# =============================================================================
 free_ports() {
     section "FREE COMMON DEV PORTS"
 

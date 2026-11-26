@@ -8,7 +8,7 @@ on:
 
 jobs:
   shellcheck:
-    name: ShellCheck + syntax
+    name: ShellCheck + syntax + tests
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,11 +16,17 @@ jobs:
       - name: Install ShellCheck
         run: brew install shellcheck
 
+      # Every file must parse with the bash that ships with macOS.
       - name: Bash syntax check (system bash 3.2)
-        run: /bin/bash -n mac_cleaner.sh
+        run: |
+          for f in mac_cleaner.sh lib/*.sh lib/*/*.sh tests/*.sh; do
+            /bin/bash -n "$f" || exit 1
+          done
 
-      - name: ShellCheck
-        run: shellcheck --severity=warning mac_cleaner.sh
+      # Each file is linted, not only the entry script: -x lets ShellCheck
+      # follow the `source` lines so it knows what the other modules define.
+      - name: ShellCheck (every module)
+        run: shellcheck --severity=warning -x mac_cleaner.sh lib/*.sh lib/*/*.sh tests/*.sh
 
-      - name: Regression tests (system bash 3.2)
+      - name: Tests (system bash 3.2)
         run: /bin/bash tests/run_tests.sh

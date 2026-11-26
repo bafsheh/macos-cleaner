@@ -39,6 +39,14 @@ _mem_report() {
     info "$when : free ~$(human_size "$free_kb")  ·  reclaimable ~$(human_size "$reclaim_kb")"
 }
 
+# =============================================================================
+# § free_memory  (menu action)
+#
+#   Reports free / reclaimable RAM, runs `sudo purge`, and reports it again.
+#
+#   Globals:
+#     writes TOTAL_CLEANED / TOTAL_FAILED
+# =============================================================================
 free_memory() {
     section "FREE UP MEMORY (RAM)"
 

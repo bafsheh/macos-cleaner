@@ -8,6 +8,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Uninstall ▸ Apps: a live list of every app on the Mac.** The list opens at once and fills in
+  while a background scan runs: each app appears as soon as it is found, its size replaces `…` once
+  measured (several apps at a time), and a progress bar covers the whole list. Scroll, filter with
+  `/`, sort by name or size with `s`, tick one or more apps. Apps in `/Applications`,
+  `~/Applications` and those Spotlight finds elsewhere in the home folder are listed; macOS system
+  apps are not, because they cannot be removed.
+- **Complete uninstall.** For each chosen app the uninstaller searches 30 locations at the same
+  time (app data, caches, preferences, saved state, containers, group containers, web data, logs,
+  crash reports, launch agents and daemons, privileged helpers, install receipts, per-user temp and
+  cache folders, dotfolders, Spotlight) with a live progress line, shows what it found in two
+  groups (*belongs to the app* and *needs your review*), and asks: `y` app and its own items, `a`
+  everything, `c` choose item by item. It then quits the app, stops its launchd services, resets
+  its privacy permissions (`tccutil reset All`, also for helper bundles inside the app), removes
+  its login item, tells Homebrew (casks) and Launch Services, deletes each item with a progress
+  bar and one log line per item, and prints a receipt: removed, freed, failed with the reason,
+  kept. Every searched location goes to the log file.
+- Uninstall safety: leftovers match by exact bundle ID or exact name only (uninstalling "Code"
+  never matches "Xcode"); data of an installed sibling app (Chrome Canary next to Chrome) and of a
+  second copy of the same app is kept; generic names (Electron, Helper …) are never matched by
+  name; every delete passes an allow-list of folders (`un_safe_target`); the app running the
+  current session is never uninstalled; Keychain entries are never touched.
+  `UNINSTALL_ASSUME_YES=1` for scripts (own items only), plus `UNINSTALL_APP_ROOTS`,
+  `UNINSTALL_SPOTLIGHT`, `UNINSTALL_JOBS`, `UNINSTALL_NO_SUDO`.
+- **Uninstall ▸ Packages & command-line tools**: the former name search, now only for Homebrew,
+  npm, pip, Cargo, RubyGems and loose binaries, with a tick list and a summary.
+- **Summary boxes.** The action queue ends with *What happened* (each action: space freed, time,
+  failed steps). The clean-up ends with *Cleanup complete*, including the eight biggest wins of
+  the run. The result stays on screen until a key is pressed.
+- Menus show a description beside each item, in two aligned columns; destructive items are marked
+  in red. The main menu shows a disk gauge (green, amber from 75%, red from 90%).
+- Smoother progress bars (eight steps per cell), a shared spinner, and a live one-line status used
+  by the leftover search and the removal.
+- `ui_picker`: a scrollable, filterable checklist that can update while a background job feeds it.
+  Runs on the alternate screen, so the previous screen is restored on exit.
+- Tests: 45 new ones (52 in all) for long-running screens (no file-descriptor growth), the folder scanner, the disk usage report, the disk map, app
+  discovery, leftover matching, the delete guard, the full
+  uninstall flow, packages, key parsing, the progress bar, the picker, menus and logging. Run a
+  subset with `bash tests/run_tests.sh <part of a test name>`.
+- `MAC_CLEANER_LOG` chooses the log file.
+
 - **Project build dirs** menu action, using the rules of [plonge](https://github.com/mattt/plonge).
   Finds `node_modules`, `.venv`, `target`, `.build`, `dist`, `DerivedData`, `.next`, `_build`,
   `vendor/bundle` and similar folders in your dev folders. Generic names need a project file beside
@@ -33,6 +73,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   and stale Cursor settings-DB copies (`state.vscdb.bak-*`, often ~500 MB each).
 
 ### Fixed
+- **Disk map printed "read error: 0: Bad file descriptor" without end.** bash 3.2 does not close
+  the file descriptor of a process substitution (`< <(cmd)`) while it is inside a function, only
+  back at the top level of the script, and the main menu was a function that loops. The disk map
+  used one ten times a second, so after about 25 seconds of scanning it reached the 256 open
+  files a Terminal window allows, lost the keyboard's descriptor, and its loop spun on failed
+  reads. The same leak sat in the cleanup's live panel (two per redraw, also in earlier releases),
+  the disk usage report, the app list and the picker. Now: nothing that repeats uses process
+  substitution, the menu loop runs at the top level of `mac_cleaner.sh` so one-off uses are
+  released after every menu action, the limit is raised to 4096 where allowed, and a loop that
+  waits for keys ends if the keyboard is ever gone (`ui_keys_lost`). Measured on a full scan
+  under a 256 limit: 4 to 6 open descriptors throughout, where it used to climb to 256.
+- **"Clean up" looked frozen at the disk usage report.** The report measured the whole home
+  folder with one `du` in the foreground: nothing was printed until it finished, there was no
+  time limit and no way out, and it ran twice (home, then `~/Library`) before and after cleaning.
+  It now uses the parallel scanner, shows a live progress line (`412/980 folders measured`), can
+  be skipped with `s`, stops after `REPORT_TIMEOUT` seconds (default 90) and lists what it has by
+  then, and gets both lists from a single scan. On a 185 GB home folder: 34 s with progress,
+  instead of several minutes of silence.
+- The main menu cleared the screen as soon as an action finished, so its result scrolled away
+  unread. Every action (cleanup queue, app uninstall, package uninstall) now ends with a clear
+  prompt, "✓ Finished. Press any key to clear the screen and return to the menu.", and the
+  screen is cleared after the key, so the next menu is no longer drawn under the old output.
+- The old uninstaller matched leftovers by substring (`*name*`), which could list another app's
+  folders for removal. Matching is now exact (see Added).
 - **Empty Trash left items behind.** With Full Disk Access, read-only folders (trashed
   `node_modules`, Go module caches, app bundles) and Finder-locked files could not be deleted, yet
   the step still reported success. Trash folders are now unlocked and made writable first, and any
@@ -49,6 +113,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   process (such as an MCP server started with `uvx`). It is skipped with a tip while one runs.
 
 ### Changed
+- **Disk map: faster and never waiting.**
+  - New scanner (`lib/helpers/duscan.sh`). A folder that is still being measured after one second
+    is stopped and split into one job per sub-folder, at any depth, so a single deep tree (a
+    folder of git worktrees, an Xcode cache) is spread over all workers instead of setting the pace
+    of the whole scan. Workers default to the CPU count (max 16, was 8) and need no lock to share
+    the queue. Measured on a 185 GB home folder: 83 s before, about 35 s now; `~/Projects` alone
+    15 s instead of 60-80 s, with totals identical to `du`.
+  - The map is rendered by a background job; the foreground only paints finished frames and, ten
+    times a second, the bottom line: spinner, progress bar, folders measured, the folder just
+    finished. Keys respond at once instead of once a second.
+  - Recommendations are measured by one job each and join the header as they finish
+    (`4.2 GB  14/20 checked`), instead of "measuring…" until the slowest one is done. While they
+    are still coming in after the scan, the bottom line shows their progress.
+  - `DU_SPLIT_SECS` tunes the split time; `DM_JOBS` now applies to the report too.
+- **The log file is plain text.** It used to be a copy of the terminal output, colour codes
+  included. Each line now starts with the time since the run began (`[+02:14]`).
+- Colours: one palette for 256-colour terminals (softer green, amber, red, cyan), with a 16-colour
+  fallback; bold text uses the terminal's own foreground, so it stays readable on light themes;
+  the selected row is white on blue.
+- `lib/helpers.sh` and `lib/ui.sh` are now loaders. The code moved, unchanged in behaviour, into
+  `lib/helpers/` (measure, exec, process, parallel, macos, clean, scan) and `lib/ui/` (term,
+  widgets, select, picker). `kill_tree`, `proc_wait_gone` and `proc_ancestor_pids` replace three
+  private copies in the disk map, the parallel runner and "Kill all open apps".
+- `lib/actions/cleanup.sh`: section bodies are indented, their variables are local, and the
+  repeated per-app cache lines use `clean_subdirs`. The paths cleaned are the same as before.
+- The uninstaller no longer builds command strings and runs them with `eval`; names and paths
+  are passed as arguments.
+- CI lints every file with ShellCheck (it used to lint only `mac_cleaner.sh`) and syntax-checks
+  every file with the system bash.
+- The main menu is a loop instead of a function that calls itself.
+- The version shown in the banner comes from one place, `MC_VERSION` in `lib/core.sh`.
 - Destructive actions (Docker, Colima, Ollama, worktrees, project folders, quit apps) share one
   confirmation helper, `confirm_action`, instead of six copies of the same prompt.
 - **Disk map scans live and in parallel.** The map opens immediately (empty) and fills in once a
